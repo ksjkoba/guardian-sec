@@ -1,0 +1,27 @@
+GUARDIAN LIVE-FEED FIX — drop-in
+=================================
+Replace these two files in your project:
+
+  guardian/web/server.py            <- REQUIRED (the actual fix)
+  guardian/web/static/index.html    <- OPTIONAL (uptime polish only)
+
+Then restart:
+
+  python3 -m guardian.cli serve
+
+Open the dashboard at:
+
+  http://127.0.0.1:8765
+
+What was wrong:
+  The WebSocket broadcast asyncio.Queue was created at create_app() time on the
+  main thread, but uvicorn runs in a background daemon thread with its own event
+  loop. Cross-thread enqueues from the monitor threads therefore targeted a loop
+  the broadcaster wasn't awaiting, so alerts/heartbeats never reached the client
+  (UPTIME 0s, "reconnecting...", TI feed stuck). Both _emit and the broadcaster
+  also swallowed exceptions silently, hiding it.
+
+The fix:
+  - Queue + loop are now captured INSIDE lifespan via asyncio.get_running_loop().
+  - Heartbeats now carry live stats so UPTIME advances and proves liveness.
+  - Silent except: pass replaced with logging so any regression is visible.

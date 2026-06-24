@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+dist/
+build/
+
+# Test / tooling
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local secrets & encrypted data (never commit)
+.env
+*.pem
+.guardian/
+**/.guardian/
+
+# Models & caches
+models/
+*.gguf
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+*:Zone.Identifier

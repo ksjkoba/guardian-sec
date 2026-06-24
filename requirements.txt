@@ -1,0 +1,20 @@
+# Core (always required)
+click>=8.1
+rich>=13.0
+psutil>=5.9
+
+# Web dashboard (optional)
+# fastapi>=0.111
+# uvicorn[standard]>=0.29
+# cryptography>=42.0
+
+# SLM inference — install manually for your platform:
+# CPU-only (slow but universal):
+#   pip install llama-cpp-python
+# GPU (CUDA):
+#   CMAKE_ARGS="-DLLAMA_CUDA=on" pip install llama-cpp-python
+# GPU (Metal / Apple Silicon):
+#   CMAKE_ARGS="-DLLAMA_METAL=on" pip install llama-cpp-python
+
+# Network monitoring (optional — requires root/cap_net_raw)
+# scapy>=2.5

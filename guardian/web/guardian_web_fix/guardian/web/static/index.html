@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Guardian — Cybersecurity Dashboard</title>
+<style>
+  :root {
+    --bg: #0a0e1a;
+    --surface: #111827;
+    --surface2: #1a2235;
+    --border: #1e2d45;
+    --accent: #e53e3e;
+    --accent2: #f6ad55;
+    --green: #48bb78;
+    --blue: #4299e1;
+    --purple: #9f7aea;
+    --text: #e2e8f0;
+    --text-dim: #718096;
+    --crit: #fc8181;
+    --high: #f6ad55;
+    --med: #f6e05e;
+    --low: #68d391;
+    --info: #63b3ed;
+    --font: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 13px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Header ── */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .logo {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+  }
+  .logo span { color: var(--text-dim); }
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    transition: background 0.3s;
+  }
+  .status-dot.live { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .status-dot.dead { background: var(--accent); }
+  #conn-label { color: var(--text-dim); font-size: 11px; }
+  .header-stats {
+    margin-left: auto;
+    display: flex;
+    gap: 24px;
+  }
+  .hstat { text-align: center; }
+  .hstat-val { font-size: 20px; font-weight: 700; }
+  .hstat-label { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
+  .hstat-val.crit { color: var(--crit); }
+  .hstat-val.high { color: var(--high); }
+  .hstat-val.campaigns { color: var(--purple); }
+  .hstat-val.iocs { color: var(--blue); }
+
+  /* ── Layout ── */
+  .main {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    grid-template-rows: auto 1fr;
+    gap: 1px;
+    flex: 1;
+    background: var(--border);
+  }
+  .panel {
+    background: var(--bg);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .panel-header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+    flex-shrink: 0;
+  }
+  .panel-header .count {
+    margin-left: auto;
+    background: var(--surface2);
+    padding: 2px 8px;
+    border-radius: 10px;
+    color: var(--text);
+  }
+  .panel-body { overflow-y: auto; flex: 1; }
+
+  /* ── Alert feed ── */
+  #alerts-panel { grid-column: 1; grid-row: 1 / 3; }
+
+  .filter-bar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 8px 16px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+  }
+  .filter-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    padding: 4px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: var(--font);
+    font-size: 11px;
+    transition: all 0.15s;
+  }
+  .filter-btn:hover, .filter-btn.active { border-color: var(--accent); color: var(--text); }
+  .filter-btn.active { background: var(--accent); color: #fff; }
+
+  .alert-item {
+    border-bottom: 1px solid var(--border);
+    padding: 12px 16px;
+    cursor: pointer;
+    transition: background 0.1s;
+    position: relative;
+  }
+  .alert-item:hover { background: var(--surface2); }
+  .alert-item.expanded { background: var(--surface2); }
+  .alert-item::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+  }
+  .alert-item.sev-CRITICAL::before { background: var(--crit); }
+  .alert-item.sev-HIGH::before { background: var(--high); }
+  .alert-item.sev-MEDIUM::before { background: var(--med); }
+  .alert-item.sev-LOW::before { background: var(--low); }
+  .alert-item.sev-INFO::before { background: var(--info); }
+  .alert-row1 { display: flex; align-items: center; gap: 8px; }
+  .sev-badge {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+  .sev-CRITICAL { background: rgba(252,129,129,0.2); color: var(--crit); }
+  .sev-HIGH { background: rgba(246,173,85,0.2); color: var(--high); }
+  .sev-MEDIUM { background: rgba(246,224,94,0.2); color: var(--med); }
+  .sev-LOW { background: rgba(104,211,145,0.2); color: var(--low); }
+  .sev-INFO { background: rgba(99,179,237,0.2); color: var(--info); }
+  .module-badge {
+    font-size: 10px;
+    color: var(--text-dim);
+    background: var(--surface2);
+    padding: 2px 6px;
+    border-radius: 3px;
+  }
+  .alert-title { font-weight: 600; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .alert-time { font-size: 10px; color: var(--text-dim); flex-shrink: 0; }
+  .alert-desc { margin-top: 4px; color: var(--text-dim); font-size: 12px; }
+  .alert-detail {
+    display: none;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+  }
+  .alert-item.expanded .alert-detail { display: block; }
+  .detail-row { display: flex; gap: 8px; margin-bottom: 6px; }
+  .detail-label { color: var(--text-dim); min-width: 100px; font-size: 11px; }
+  .detail-val { color: var(--text); font-size: 11px; flex: 1; word-break: break-all; }
+  .ioc-badge {
+    display: inline-block;
+    background: rgba(229,62,62,0.15);
+    border: 1px solid rgba(229,62,62,0.4);
+    color: var(--crit);
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 10px;
+    margin-top: 4px;
+    margin-right: 4px;
+  }
+  .ioc-badge.family { background: rgba(246,173,85,0.15); border-color: rgba(246,173,85,0.4); color: var(--high); }
+  .upgraded-badge {
+    font-size: 10px;
+    color: var(--accent2);
+    margin-left: 4px;
+  }
+
+  /* ── Campaigns panel ── */
+  #campaigns-panel { grid-column: 2; grid-row: 1; }
+
+  .campaign-item {
+    border-bottom: 1px solid var(--border);
+    padding: 12px 16px;
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+  .campaign-item:hover { background: var(--surface2); }
+  .campaign-item.expanded { background: var(--surface2); }
+  .camp-row1 { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .camp-title { font-weight: 600; flex: 1; font-size: 12px; }
+  .camp-count { color: var(--text-dim); font-size: 10px; }
+
+  /* Kill-chain bar */
+  .killchain {
+    display: flex;
+    gap: 2px;
+    margin: 6px 0;
+    height: 4px;
+    border-radius: 2px;
+    overflow: hidden;
+    background: var(--border);
+  }
+  .kc-seg {
+    flex: 1;
+    background: var(--border);
+    transition: background 0.3s;
+  }
+  .kc-seg.active { background: var(--accent); }
+  .kc-seg.recon.active { background: var(--blue); }
+  .kc-seg.init.active { background: var(--purple); }
+  .kc-seg.exec.active { background: var(--high); }
+  .kc-seg.persist.active { background: var(--accent2); }
+  .kc-seg.priv.active { background: #ed8936; }
+  .kc-seg.cred.active { background: #fc8181; }
+  .kc-seg.move.active { background: #f687b3; }
+  .kc-seg.coll.active { background: #76e4f7; }
+  .kc-seg.c2.active { background: var(--accent); }
+  .kc-seg.impact.active { background: #fc4040; box-shadow: 0 0 4px #fc4040; }
+
+  .kc-labels {
+    display: flex;
+    gap: 2px;
+    font-size: 8px;
+    color: var(--text-dim);
+    margin-bottom: 4px;
+  }
+  .kc-label { flex: 1; overflow: hidden; white-space: nowrap; }
+
+  .camp-tactics { font-size: 10px; color: var(--blue); margin-top: 4px; }
+  .camp-narrative {
+    display: none;
+    margin-top: 8px;
+    padding: 8px;
+    background: var(--bg);
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--text-dim);
+    line-height: 1.5;
+  }
+  .campaign-item.expanded .camp-narrative { display: block; }
+
+  /* ── Right sidebar bottom — IOC check + feeds ── */
+  #sidebar-bottom { grid-column: 2; grid-row: 2; display: flex; flex-direction: column; }
+
+  /* IOC search */
+  .ioc-search {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 16px;
+    flex-shrink: 0;
+  }
+  .ioc-search h4 { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+  .ioc-input-row { display: flex; gap: 8px; }
+  .ioc-input {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-family: var(--font);
+    font-size: 12px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .ioc-input:focus { border-color: var(--blue); }
+  .ioc-btn {
+    background: var(--blue);
+    border: none;
+    color: #fff;
+    padding: 6px 14px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: var(--font);
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .ioc-btn:hover { opacity: 0.85; }
+  #ioc-result { margin-top: 8px; font-size: 11px; }
+  .ioc-clean { color: var(--green); }
+  .ioc-hit { color: var(--crit); }
+
+  /* Feed status */
+  .feeds-section {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 16px;
+  }
+  .feeds-section h4 { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }
+  .feed-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+    font-size: 11px;
+  }
+  .feed-name { flex: 1; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .feed-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .feed-dot.fresh { background: var(--green); }
+  .feed-dot.stale { background: var(--high); }
+  .feed-dot.missing { background: var(--accent); }
+  .feed-type { color: var(--text-dim); font-size: 10px; background: var(--surface2); padding: 1px 5px; border-radius: 3px; }
+
+  /* ── Heatmap row ── */
+  .sev-bar {
+    display: flex;
+    height: 3px;
+    border-radius: 2px;
+    overflow: hidden;
+    margin: 0 16px 8px;
+    flex-shrink: 0;
+  }
+  .sev-bar-seg { transition: flex 0.5s; }
+
+  /* ── Empty states ── */
+  .empty {
+    padding: 40px 16px;
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 12px;
+  }
+  .empty-icon { font-size: 32px; margin-bottom: 8px; opacity: 0.4; }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+
+  /* ── Toast ── */
+  #toast {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    padding: 10px 16px;
+    border-radius: 4px;
+    font-size: 12px;
+    max-width: 340px;
+    transform: translateY(80px);
+    opacity: 0;
+    transition: all 0.3s;
+    z-index: 999;
+    pointer-events: none;
+  }
+  #toast.show { transform: translateY(0); opacity: 1; }
+  #toast.campaign { border-left-color: var(--accent); }
+  #toast.alert-sev-CRITICAL { border-left-color: var(--crit); }
+  #toast.alert-sev-HIGH { border-left-color: var(--high); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">GUARDIAN<span>/SEC</span></div>
+  <div class="status-dot" id="dot"></div>
+  <span id="conn-label">connecting…</span>
+  <div class="header-stats">
+    <div class="hstat">
+      <div class="hstat-val" id="stat-total">0</div>
+      <div class="hstat-label">Total Alerts</div>
+    </div>
+    <div class="hstat">
+      <div class="hstat-val crit" id="stat-crit">0</div>
+      <div class="hstat-label">Critical</div>
+    </div>
+    <div class="hstat">
+      <div class="hstat-val high" id="stat-high">0</div>
+      <div class="hstat-label">High</div>
+    </div>
+    <div class="hstat">
+      <div class="hstat-val campaigns" id="stat-campaigns">0</div>
+      <div class="hstat-label">Campaigns</div>
+    </div>
+    <div class="hstat">
+      <div class="hstat-val iocs" id="stat-iocs">0</div>
+      <div class="hstat-label">IOC Hits</div>
+    </div>
+    <div class="hstat">
+      <div class="hstat-val" id="stat-uptime" style="color:var(--green)">0s</div>
+      <div class="hstat-label">Uptime</div>
+    </div>
+  </div>
+</header>
+
+<div class="sev-bar" id="sev-bar">
+  <div class="sev-bar-seg" style="background:var(--crit);flex:0"></div>
+  <div class="sev-bar-seg" style="background:var(--high);flex:0"></div>
+  <div class="sev-bar-seg" style="background:var(--med);flex:0"></div>
+  <div class="sev-bar-seg" style="background:var(--low);flex:0"></div>
+  <div class="sev-bar-seg" style="background:var(--info);flex:0"></div>
+  <div class="sev-bar-seg" style="background:var(--border);flex:1"></div>
+</div>
+
+<div class="main">
+
+  <!-- ── Left: alert feed ── -->
+  <div class="panel" id="alerts-panel">
+    <div class="panel-header">
+      ⚡ Live Alert Feed
+      <span class="count" id="alert-count">0</span>
+    </div>
+    <div class="filter-bar">
+      <button class="filter-btn active" data-sev="ALL">All</button>
+      <button class="filter-btn" data-sev="CRITICAL">Critical</button>
+      <button class="filter-btn" data-sev="HIGH">High</button>
+      <button class="filter-btn" data-sev="MEDIUM">Medium</button>
+      <button class="filter-btn" data-sev="LOW">Low</button>
+      <button class="filter-btn" data-sev="IOC">IOC Hits</button>
+    </div>
+    <div class="panel-body" id="alert-list">
+      <div class="empty"><div class="empty-icon">🛡</div>No alerts yet — Guardian is watching.</div>
+    </div>
+  </div>
+
+  <!-- ── Right top: campaigns ── -->
+  <div class="panel" id="campaigns-panel">
+    <div class="panel-header">
+      🎯 Attack Campaigns
+      <span class="count" id="camp-count">0</span>
+    </div>
+    <div class="panel-body" id="camp-list">
+      <div class="empty"><div class="empty-icon">📡</div>No campaigns yet.</div>
+    </div>
+  </div>
+
+  <!-- ── Right bottom: IOC check + feeds ── -->
+  <div class="panel" id="sidebar-bottom">
+    <div class="ioc-search">
+      <h4>🔍 IOC Lookup</h4>
+      <div class="ioc-input-row">
+        <input class="ioc-input" id="ioc-input" placeholder="IP, domain, hash, or URL…" />
+        <button class="ioc-btn" id="ioc-check-btn">Check</button>
+      </div>
+      <div id="ioc-result"></div>
+    </div>
+    <div class="feeds-section">
+      <h4>📡 TI Feed Status</h4>
+      <div id="feed-list"><div style="color:var(--text-dim);font-size:11px">Loading…</div></div>
+    </div>
+  </div>
+
+</div><!-- .main -->
+
+<div id="toast"></div>
+
+<script>
+// ── State ────────────────────────────────────────────────────────────────────
+const alerts = [];      // most-recent first
+const campaigns = {};   // id → campaign object
+let stats = {};
+let activeFilter = 'ALL';
+let ws = null;
+let reconnectTimer = null;
+
+const KC_PHASES = [
+  {key:'recon',   label:'Recon',    tactics:['Reconnaissance','Resource Development']},
+  {key:'init',    label:'Init',     tactics:['Initial Access']},
+  {key:'exec',    label:'Exec',     tactics:['Execution']},
+  {key:'persist', label:'Persist',  tactics:['Persistence']},
+  {key:'priv',    label:'Priv Esc', tactics:['Privilege Escalation','Defense Evasion']},
+  {key:'cred',    label:'Creds',    tactics:['Credential Access','Discovery']},
+  {key:'move',    label:'Lateral',  tactics:['Lateral Movement']},
+  {key:'coll',    label:'Collect',  tactics:['Collection']},
+  {key:'c2',      label:'C2',       tactics:['Command and Control','Exfiltration']},
+  {key:'impact',  label:'Impact',   tactics:['Impact']},
+];
+
+// ── WebSocket connection ──────────────────────────────────────────────────────
+function connect() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  ws = new WebSocket(`${proto}://${location.host}/ws`);
+
+  ws.onopen = () => {
+    setConnected(true);
+    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+  };
+
+  ws.onclose = () => {
+    setConnected(false);
+    reconnectTimer = setTimeout(connect, 3000);
+  };
+
+  ws.onerror = () => ws.close();
+
+  ws.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    if (msg.type === 'snapshot') {
+      handleSnapshot(msg);
+    } else if (msg.type === 'alert') {
+      handleAlert(msg.data);
+    } else if (msg.type === 'campaign') {
+      handleCampaign(msg.data);
+    } else if (msg.type === 'heartbeat') {
+      updateUptime(msg.ts, msg.stats);
+    }
+  };
+}
+
+function setConnected(live) {
+  const dot = document.getElementById('dot');
+  const label = document.getElementById('conn-label');
+  dot.className = 'status-dot ' + (live ? 'live' : 'dead');
+  label.textContent = live ? 'live' : 'reconnecting…';
+}
+
+// ── Snapshot ─────────────────────────────────────────────────────────────────
+function handleSnapshot(msg) {
+  alerts.length = 0;
+  Object.keys(campaigns).forEach(k => delete campaigns[k]);
+
+  (msg.alerts || []).forEach(a => alerts.push(a));
+  (msg.campaigns || []).forEach(c => campaigns[c.id] = c);
+  stats = msg.stats || {};
+
+  renderAlerts();
+  renderCampaigns();
+  renderStats();
+  loadFeeds();
+}
+
+// ── Alert handling ────────────────────────────────────────────────────────────
+function handleAlert(a) {
+  alerts.unshift(a);
+  if (alerts.length > 500) alerts.pop();
+  prependAlert(a);
+  updateAlertCount();
+  updateStats({ total: 1, sev: a.severity, ioc: a.ioc_matches && a.ioc_matches.length > 0 });
+  if (a.severity === 'CRITICAL' || a.severity === 'HIGH' || a.ioc_tag) {
+    showToast(`[${a.severity}] ${a.title}`, 'alert-sev-' + a.severity);
+  }
+}
+
+function prependAlert(a) {
+  const list = document.getElementById('alert-list');
+  if (list.querySelector('.empty')) list.innerHTML = '';
+  if (!matchesFilter(a)) return;
+  const el = buildAlertEl(a);
+  list.insertBefore(el, list.firstChild);
+  // cap DOM nodes
+  while (list.children.length > 200) list.removeChild(list.lastChild);
+}
+
+function matchesFilter(a) {
+  if (activeFilter === 'ALL') return true;
+  if (activeFilter === 'IOC') return a.ioc_matches && a.ioc_matches.length > 0;
+  return a.severity === activeFilter;
+}
+
+function buildAlertEl(a) {
+  const div = document.createElement('div');
+  div.className = `alert-item sev-${a.severity}`;
+  div.dataset.id = a.id;
+
+  const t = new Date(a.timestamp * 1000).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const iocHtml = (a.ioc_tag)
+    ? `<div style="margin-top:6px">${a.ioc_tag.split('|').map(tag =>
+        `<span class="ioc-badge">${tag.trim()}</span>`).join('')}</div>`
+    : '';
+  const upgradedHtml = a.severity_upgraded ? `<span class="upgraded-badge">↑ severity upgraded</span>` : '';
+  const iocDetailHtml = (a.ioc_matches && a.ioc_matches.length)
+    ? `<div class="detail-row"><span class="detail-label">IOC Matches</span><span class="detail-val">${
+        a.ioc_matches.map(m =>
+          `<span class="ioc-badge">${m.feed}</span>${m.malware_family ? `<span class="ioc-badge family">${m.malware_family}</span>` : ''}`
+        ).join(' ')
+      }</span></div>`
+    : '';
+
+  div.innerHTML = `
+    <div class="alert-row1">
+      <span class="sev-badge sev-${a.severity}">${a.severity}</span>
+      <span class="module-badge">${a.module}</span>
+      <span class="alert-title">${esc(a.title)}</span>
+      ${upgradedHtml}
+      <span class="alert-time">${t}</span>
+    </div>
+    <div class="alert-desc">${esc(a.description).slice(0,120)}</div>
+    ${iocHtml}
+    <div class="alert-detail">
+      <div class="detail-row"><span class="detail-label">Evidence</span><span class="detail-val">${esc(a.evidence || '—')}</span></div>
+      <div class="detail-row"><span class="detail-label">Recommendation</span><span class="detail-val">${esc(a.recommendation || '—')}</span></div>
+      ${iocDetailHtml}
+      <div class="detail-row"><span class="detail-label">Alert ID</span><span class="detail-val" style="color:var(--text-dim)">${a.id}</span></div>
+    </div>
+  `;
+  div.addEventListener('click', () => div.classList.toggle('expanded'));
+  return div;
+}
+
+function renderAlerts() {
+  const list = document.getElementById('alert-list');
+  const visible = alerts.filter(matchesFilter);
+  if (!visible.length) {
+    list.innerHTML = '<div class="empty"><div class="empty-icon">🛡</div>No alerts match filter.</div>';
+    return;
+  }
+  list.innerHTML = '';
+  visible.slice(0, 200).forEach(a => list.appendChild(buildAlertEl(a)));
+  updateAlertCount();
+}
+
+function updateAlertCount() {
+  document.getElementById('alert-count').textContent = alerts.filter(matchesFilter).length;
+}
+
+// ── Campaign handling ─────────────────────────────────────────────────────────
+function handleCampaign(c) {
+  campaigns[c.id] = c;
+  renderCampaigns();
+  showToast(`🎯 Campaign: ${c.title || c.id}`, 'campaign');
+}
+
+function renderCampaigns() {
+  const list = document.getElementById('camp-list');
+  const active = Object.values(campaigns).sort((a,b) => b.last_seen - a.last_seen);
+  document.getElementById('camp-count').textContent = active.length;
+
+  if (!active.length) {
+    list.innerHTML = '<div class="empty"><div class="empty-icon">📡</div>No campaigns yet.</div>';
+    return;
+  }
+  list.innerHTML = '';
+  active.forEach(c => list.appendChild(buildCampaignEl(c)));
+}
+
+function buildCampaignEl(c) {
+  const div = document.createElement('div');
+  div.className = 'campaign-item';
+
+  const tactics = c.tactics || [];
+  const kcHtml = KC_PHASES.map(phase => {
+    const hit = tactics.some(t => phase.tactics.includes(t));
+    return `<div class="kc-seg ${phase.key}${hit ? ' active' : ''}" title="${phase.label}"></div>`;
+  }).join('');
+  const kcLabels = KC_PHASES.map(p => `<div class="kc-label">${p.label}</div>`).join('');
+
+  const narrative = c.synthesis
+    ? `<div class="camp-narrative">${esc(c.synthesis)}</div>`
+    : '<div class="camp-narrative" style="color:var(--text-dim);font-style:italic">SLM synthesizing attack narrative…</div>';
+
+  div.innerHTML = `
+    <div class="camp-row1">
+      <span class="sev-badge sev-${c.severity}">${c.severity}</span>
+      <span class="camp-title">${esc(c.title || 'Campaign ' + c.id.slice(0,6))}</span>
+      <span class="camp-count">${c.alert_count} alerts</span>
+    </div>
+    <div class="kc-labels">${kcLabels}</div>
+    <div class="killchain">${kcHtml}</div>
+    <div class="camp-tactics">${tactics.slice(0,5).join(' → ')}</div>
+    ${narrative}
+  `;
+  div.addEventListener('click', () => div.classList.toggle('expanded'));
+  return div;
+}
+
+// ── Stats ─────────────────────────────────────────────────────────────────────
+function renderStats() {
+  document.getElementById('stat-total').textContent = stats.total_alerts || 0;
+  document.getElementById('stat-crit').textContent = stats.critical || 0;
+  document.getElementById('stat-high').textContent = stats.high || 0;
+  document.getElementById('stat-campaigns').textContent = stats.total_campaigns || 0;
+  document.getElementById('stat-iocs').textContent = stats.ioc_hits || 0;
+  updateSevBar();
+}
+
+function updateStats({total, sev, ioc}) {
+  stats.total_alerts = (stats.total_alerts || 0) + total;
+  if (sev) { const k = sev.toLowerCase(); stats[k] = (stats[k] || 0) + 1; }
+  if (ioc) stats.ioc_hits = (stats.ioc_hits || 0) + 1;
+  renderStats();
+}
+
+function updateUptime(serverTs, serverStats) {
+  // Trust the server's authoritative stats when the heartbeat carries them,
+  // so the dashboard never drifts from the backend.
+  if (serverStats) {
+    stats = serverStats;
+    renderStats();
+  }
+  const up = stats.uptime_secs || 0;
+  const h = Math.floor(up/3600);
+  const m = Math.floor((up%3600)/60);
+  const s = up%60;
+  document.getElementById('stat-uptime').textContent =
+    h ? `${h}h${m}m` : m ? `${m}m${s}s` : `${s}s`;
+  if (!serverStats) stats.uptime_secs = (stats.uptime_secs || 0) + 1;
+}
+
+function updateSevBar() {
+  const total = (stats.total_alerts || 1);
+  const segs = document.querySelectorAll('.sev-bar .sev-bar-seg');
+  const counts = [stats.critical||0, stats.high||0, stats.medium||0, stats.low||0, stats.info||0];
+  const rest = Math.max(0, total - counts.reduce((a,b)=>a+b,0));
+  [...counts, rest].forEach((v,i) => segs[i].style.flex = v);
+}
+
+// ── Feeds ─────────────────────────────────────────────────────────────────────
+async function loadFeeds() {
+  try {
+    const r = await fetch('/api/feeds');
+    if (!r.ok) return;
+    const feeds = await r.json();
+    renderFeeds(feeds);
+  } catch {}
+}
+
+function renderFeeds(feeds) {
+  const el = document.getElementById('feed-list');
+  if (!feeds || !feeds.length) { el.innerHTML = '<div style="color:var(--text-dim);font-size:11px">Not available</div>'; return; }
+  el.innerHTML = feeds.map(f => `
+    <div class="feed-row">
+      <div class="feed-dot ${f.fresh ? 'fresh' : f.cached ? 'stale' : 'missing'}"></div>
+      <div class="feed-name" title="${f.feed}">${f.feed}</div>
+      <div class="feed-type">${f.ioc_type}</div>
+      <div style="color:var(--text-dim);font-size:10px">${f.fresh ? `${f.age_mins}m` : f.cached ? 'stale' : 'missing'}</div>
+    </div>
+  `).join('');
+}
+
+// ── IOC check ─────────────────────────────────────────────────────────────────
+document.getElementById('ioc-check-btn').addEventListener('click', checkIoc);
+document.getElementById('ioc-input').addEventListener('keydown', e => { if(e.key==='Enter') checkIoc(); });
+
+async function checkIoc() {
+  const val = document.getElementById('ioc-input').value.trim();
+  const result = document.getElementById('ioc-result');
+  if (!val) return;
+  result.textContent = 'Checking…';
+  try {
+    const r = await fetch('/api/ioc/check', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({value: val}),
+    });
+    const data = await r.json();
+    if (data.error) { result.textContent = 'Error: ' + data.error; return; }
+    if (data.malicious) {
+      result.innerHTML = `<span class="ioc-hit">⚠ MALICIOUS — ${data.matches.length} confirmed TI feed match(es)</span><br>`
+        + data.matches.map(m =>
+            `<span class="ioc-badge">${m.feed}</span>${m.malware_family ? `<span class="ioc-badge family">${m.malware_family}</span>` : ''}`
+          ).join(' ');
+    } else if (data.suspicious && data.suspicious_platform) {
+      const sp = data.suspicious_platform;
+      result.innerHTML =
+        `<span style="color:var(--high)">⚠ SUSPICIOUS — ${sp.category} (${sp.confidence}% confidence)</span><br>`
+        + `<span style="color:var(--text-dim);font-size:11px">${esc(sp.reason)}</span><br>`
+        + `<span style="color:var(--text-dim);font-size:10px;font-style:italic">Common abuse: ${esc(sp.example_abuse)}</span>`;
+    } else {
+      result.innerHTML = `<span class="ioc-clean">✓ CLEAN — not found in ${(data.total_iocs_checked||0).toLocaleString()} IOCs or suspicious platform list</span>`;
+    }
+  } catch(e) {
+    result.textContent = 'Request failed.';
+  }
+}
+
+// ── Filter buttons ────────────────────────────────────────────────────────────
+document.querySelectorAll('.filter-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    activeFilter = btn.dataset.sev;
+    renderAlerts();
+  });
+});
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+let toastTimer = null;
+function showToast(msg, cls='') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'show ' + cls;
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.className = '', 4000);
+}
+
+// ── Utility ───────────────────────────────────────────────────────────────────
+function esc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+connect();
+// Refresh feeds every 5 minutes
+setInterval(loadFeeds, 300_000);
+</script>
+</body>
+</html>
