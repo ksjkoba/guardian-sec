@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="guardian-ui-version" content="12">
+<meta name="guardian-ui-version" content="13">
 <title>Guardian — Security Dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -1966,7 +1966,7 @@
   <div class="legal-wrap">
     <div class="legal-hero">
       <h1>Legal &amp; information</h1>
-      <p>How Guardian handles your data, what the service provides, and the terms that apply when you use this dashboard.</p>
+      <p>How Guardian handles your data under Indian law, what the service provides, and the terms that apply when you use this dashboard.</p>
       <p class="legal-updated">Last updated: 24 June 2026</p>
     </div>
 
@@ -1982,43 +1982,53 @@
 
     <section class="legal-section" id="about">
       <h2>About Guardian</h2>
-      <p>Guardian is a local security dashboard that combines personal breach monitoring with live threat intelligence. It runs on your machine (default: <code style="font-family:var(--mono);font-size:0.85em">127.0.0.1</code>) and is designed for individuals and small teams who want visibility into data breaches and global security feeds without sending unnecessary data to third parties.</p>
-      <p>Personal Check queries public breach databases on your behalf. Threat Feed aggregates open-source intelligence (OSINT) from providers such as ThreatFox, URLhaus, CISA KEV, and others. Guardian does not sell your data and does not use it for advertising.</p>
-      <div class="legal-callout"><strong>Operator:</strong> Guardian Sec is provided as a self-hosted security tool. Replace this section with your organisation name, registered address, and jurisdiction when you deploy publicly.</div>
+      <p>Guardian is a local security dashboard that combines personal breach monitoring with live threat intelligence. It runs on your machine (default: <code style="font-family:var(--mono);font-size:0.85em">127.0.0.1</code>) and is designed for individuals and organisations in India who want visibility into data breaches and global security feeds while minimising unnecessary sharing of personal data.</p>
+      <p>Personal Check queries public breach databases on your behalf. Threat Feed aggregates open-source intelligence (OSINT) from providers such as ThreatFox, URLhaus, and others. Guardian does not sell your digital personal data and does not use it for advertising.</p>
+      <div class="legal-callout"><strong>Data Fiduciary (operator):</strong> Replace with your registered entity name, CIN (if applicable), principal place of business in India, and contact details before production use. If you deploy Guardian only for personal use on your own device, you may be both the user and the operator of that instance.</div>
     </section>
 
     <section class="legal-section" id="privacy">
-      <h2>Privacy policy</h2>
-      <p>This policy describes how Guardian processes information when you use the dashboard. Because Guardian runs locally, most processing happens on your device rather than on a remote multi-tenant server.</p>
+      <h2>Privacy notice (India)</h2>
+      <p>This notice is issued in accordance with the <strong>Digital Personal Data Protection Act, 2023</strong> (DPDP Act) and applicable rules thereunder, together with the <strong>Information Technology Act, 2000</strong> and the Information Technology (Reasonable Security Practices and Procedures and Sensitive Personal Data or Information) Rules, 2011, where relevant to your deployment.</p>
+      <p>Because Guardian runs locally, most processing of digital personal data occurs on your device. The operator of this deployment acts as a <strong>Data Fiduciary</strong> (or <strong>Data Processor</strong> on behalf of your organisation, if applicable). You are the <strong>Data Principal</strong> when you submit your own identifiers for checking.</p>
 
-      <h3>What we process</h3>
+      <h3>Categories of digital personal data</h3>
       <ul>
         <li><strong>Breach checks:</strong> Email addresses, phone numbers, or usernames you submit for lookup.</li>
         <li><strong>Password checks:</strong> Only a partial SHA-1 hash fingerprint (k-anonymity) — never your full password.</li>
-        <li><strong>Watchlist:</strong> Identifiers you choose to monitor, encrypted at rest on this device.</li>
-        <li><strong>Threat feed:</strong> Public threat indicators (IPs, URLs, hashes) from global feeds — not personal data about you.</li>
-        <li><strong>Technical data:</strong> Session tokens, encrypted payloads, and optional local storage preferences (e.g. dismissing the welcome banner).</li>
+        <li><strong>Watchlist:</strong> Identifiers you choose to monitor, encrypted at rest on this device (AES-256-GCM).</li>
+        <li><strong>Threat feed:</strong> Public threat indicators (IPs, URLs, hashes) — generally not personal data about you.</li>
+        <li><strong>Technical data:</strong> Session tokens, encrypted payloads, and optional local UI preferences.</li>
       </ul>
 
-      <h3>Legal bases (GDPR / UK GDPR)</h3>
-      <p>Where EU or UK data protection law applies, we rely on:</p>
+      <h3>Purpose &amp; lawful processing (DPDP Act)</h3>
+      <p>We process digital personal data for the following purposes:</p>
       <ul>
-        <li><strong>Legitimate interests</strong> — operating a security monitoring tool you have chosen to run, detecting exposure in breach databases, and displaying threat intelligence relevant to your security posture.</li>
-        <li><strong>Consent</strong> — where you voluntarily submit identifiers for checking or add them to a watchlist.</li>
-        <li><strong>Contract</strong> — if you use Guardian under an agreement with your employer or service provider.</li>
+        <li><strong>Consent</strong> — where you voluntarily submit an identifier for a breach check or add it to a watchlist (Section 6, DPDP Act).</li>
+        <li><strong>Legitimate uses</strong> — where permitted, such as responding to a security incident affecting you, or processing necessary for a lawful purpose connected with cybersecurity monitoring you have requested (see Section 7 and applicable notifications under the DPDP Act).</li>
+        <li><strong>Employment / contractual</strong> — if your employer or service provider deploys Guardian for workforce security, processing may be under your contract of employment or service agreement.</li>
       </ul>
+      <p>We process only data adequate and relevant for these purposes and do not retain it longer than necessary (see Retention).</p>
 
-      <h3>Third-party processors</h3>
-      <p>Breach lookups may contact external APIs (e.g. Have I Been Pwned, XposedOrNot, HackMyIP) over HTTPS. Only the data required for the lookup is transmitted. Review each provider's privacy policy before enabling live mode. API keys you configure (e.g. HIBP) are read from your local environment — not from Guardian's servers.</p>
+      <h3>Data processors &amp; cross-border transfers</h3>
+      <p>Breach lookups may contact external APIs (e.g. Have I Been Pwned, XposedOrNot, HackMyIP) over HTTPS. Those providers may process data outside India. Under the DPDP Act, cross-border transfers are permitted to notified countries or under approved contractual mechanisms. Review each provider's terms before enabling live mode. API keys (e.g. HIBP) are read from your local environment only.</p>
 
-      <h3>Your rights</h3>
-      <p>Depending on your location, you may have rights to access, rectify, erase, restrict, or port personal data, and to object to processing. Because data is stored locally, you can delete watchlist entries in the dashboard or remove <code style="font-family:var(--mono);font-size:0.85em">~/.guardian/</code> data files on your machine. Contact the operator (see Contact) to exercise rights where applicable.</p>
+      <h3>Your rights as a Data Principal</h3>
+      <p>Subject to the DPDP Act, you may have the right to:</p>
+      <ul>
+        <li>Obtain information about personal data processed about you;</li>
+        <li>Seek correction, completion, updating, or erasure of your personal data;</li>
+        <li>Withdraw consent (where processing is consent-based), without affecting prior lawful processing;</li>
+        <li>Nominate another individual to exercise your rights in the event of death or incapacity;</li>
+        <li>Grievance redressal through our Grievance Officer (see Contact).</li>
+      </ul>
+      <p>Because watchlist and cache data are stored locally, you can delete watchlist entries in the dashboard or remove files under <code style="font-family:var(--mono);font-size:0.85em">~/.guardian/</code> on your machine. For other requests, contact the Grievance Officer.</p>
 
-      <h3>International transfers</h3>
-      <p>External breach and threat APIs may process data in countries outside your own. Use providers and configurations appropriate for your compliance requirements.</p>
+      <h3>Security safeguards (IT Act &amp; DPDP)</h3>
+      <p>We implement reasonable security practices including encryption in transit and at rest (see Data protection). In the event of a personal data breach that is likely to affect Data Principals, the Data Fiduciary must inform the Data Protection Board of India and affected individuals as required under the DPDP Act and applicable rules.</p>
 
-      <h3>California (CCPA/CPRA)</h3>
-      <p>Guardian does not sell personal information. California residents may request disclosure or deletion of personal information held by the operator of this deployment. Local watchlist and cache data can be deleted from your device directly.</p>
+      <h3>Children's data</h3>
+      <p>Guardian is not directed at children under 18. Verifiable parental consent is required before processing a child's personal data under the DPDP Act. Do not submit minors' identifiers unless you are their parent or lawful guardian and have appropriate authority.</p>
 
       <h3>Retention</h3>
       <ul>
@@ -2027,6 +2037,9 @@
         <li>Session encryption keys: expire after one hour of inactivity.</li>
         <li>Threat alerts: in-memory feed, not a permanent archive by default.</li>
       </ul>
+
+      <h3>Other jurisdictions</h3>
+      <p>If you access Guardian from outside India, local laws (e.g. GDPR, UK GDPR, or US state privacy laws) may also apply to your operator or to third-party APIs. Configure providers accordingly.</p>
     </section>
 
     <section class="legal-section" id="terms">
@@ -2047,6 +2060,9 @@
       <h3>Limitation of liability</h3>
       <p>Guardian is provided "as is" without warranties of any kind. The operators are not liable for damages arising from reliance on breach results, missed exposures, false positives, or threat feed delays. You remain responsible for your own security decisions.</p>
 
+      <h3>Governing law &amp; jurisdiction</h3>
+      <p>These terms are governed by the laws of <strong>India</strong>. Courts at <em>[insert city, e.g. Bengaluru / Mumbai / New Delhi]</em> shall have exclusive jurisdiction, subject to applicable consumer protection laws.</p>
+
       <h3>Changes</h3>
       <p>We may update these terms. Material changes will be reflected in the "Last updated" date above. Continued use after changes constitutes acceptance.</p>
     </section>
@@ -2065,35 +2081,37 @@
 
     <section class="legal-section" id="cookies">
       <h2>Cookies &amp; local storage</h2>
-      <p>Guardian does not use third-party advertising or tracking cookies.</p>
+      <p>Guardian uses only strictly necessary local storage and session data for security — not third-party advertising or cross-site tracking cookies.</p>
       <ul>
-        <li><strong>sessionStorage / localStorage:</strong> May store UI preferences (e.g. welcome banner dismissed). No cross-site tracking.</li>
+        <li><strong>localStorage:</strong> UI preferences (e.g. welcome banner dismissed) on your device only.</li>
         <li><strong>Session tokens:</strong> Held in browser memory for encrypted API calls; not shared with external sites.</li>
         <li><strong>Server-side files:</strong> Encrypted vault files under <code style="font-family:var(--mono);font-size:0.85em">~/.guardian/</code> on your computer.</li>
       </ul>
-      <p>Under the ePrivacy Directive and similar laws, strictly necessary local storage for security and session management does not require consent in many jurisdictions. Jurisdiction-specific requirements may apply to your deployment.</p>
+      <p>Under Indian law, including the DPDP Act and IT Rules, processing for cybersecurity and session integrity on a locally hosted tool you operate may fall within permitted purposes when adequate notice is provided (this page). Organisations deploying Guardian to employees should align cookie and storage notices with their internal policies.</p>
     </section>
 
     <section class="legal-section" id="disclaimer">
       <h2>Disclaimer</h2>
-      <p>Guardian is not legal advice, not a certified compliance tool, and not a substitute for professional incident response. Breach "clean" results do not guarantee your data has never been exposed. Threat feed severities are heuristic classifications of public intelligence — not official government or vendor severity ratings.</p>
+      <p>Guardian is not legal advice and is not a substitute for professional incident response or statutory breach reporting. Breach "clean" results do not guarantee your data has never been exposed. Organisations may have separate obligations under the DPDP Act, CERT-In directions, sectoral regulators (RBI, IRDAI, SEBI, etc.), or contract to report incidents — Guardian does not file reports on your behalf.</p>
       <p>Mock/demo mode uses fictional data for testing. Always verify you are in live mode before relying on results for real accounts.</p>
     </section>
 
     <section class="legal-section" id="contact">
-      <h2>Contact</h2>
-      <p>For privacy requests, security reports, or questions about these policies, contact the operator of this Guardian deployment:</p>
+      <h2>Contact &amp; grievance redressal</h2>
+      <p>Under Section 13 of the DPDP Act, every Data Fiduciary must publish the contact details of a Grievance Officer or person authorised to respond to Data Principals.</p>
       <ul>
-        <li><strong>Email:</strong> privacy@your-organisation.example (replace before production)</li>
-        <li><strong>Security issues:</strong> security@your-organisation.example</li>
+        <li><strong>Grievance Officer:</strong> [Full name] — <a href="mailto:grievance@your-organisation.in" style="color:var(--primary)">grievance@your-organisation.in</a></li>
+        <li><strong>Privacy / DPDP queries:</strong> <a href="mailto:privacy@your-organisation.in" style="color:var(--primary)">privacy@your-organisation.in</a></li>
+        <li><strong>Security vulnerabilities:</strong> <a href="mailto:security@your-organisation.in" style="color:var(--primary)">security@your-organisation.in</a></li>
+        <li><strong>Registered address:</strong> [Building, street, city, state, PIN, India]</li>
       </ul>
-      <p>EU/UK users may also lodge a complaint with their local data protection supervisory authority.</p>
+      <p>We will endeavour to resolve grievances within timelines prescribed under the DPDP Act and applicable rules. If you are not satisfied with our response, you may approach the <strong>Data Protection Board of India</strong> as provided under the DPDP Act.</p>
     </section>
   </div>
 </div>
 
 <footer class="site-footer">
-  <span>© Guardian Sec · Local security dashboard</span>
+  <span>© Guardian Sec · Governed by laws of India</span>
   <div class="site-footer-links">
     <button type="button" data-legal="about">About</button>
     <button type="button" data-legal="privacy">Privacy</button>
