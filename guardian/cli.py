@@ -911,8 +911,38 @@ def cross_verify_cmd(
     _print_cross_verify_summary(verify_alerts(batch).to_dict())
 
 
+def _load_env_file() -> None:
+    """Load project .env into os.environ (overrides defaults, like bash source)."""
+    env_path = Path(__file__).resolve().parents[1] / ".env"
+    if not env_path.is_file():
+        return
+    for line in env_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, val = line.partition("=")
+        key = key.strip()
+        if not key:
+            continue
+        val = val.strip()
+        if len(val) >= 2 and val[0] == val[-1] and val[0] in "\"'":
+            val = val[1:-1]
+        os.environ[key] = val
+
+
+def _apply_serve_env_defaults() -> None:
+    """Match scripts/open-guardian.sh defaults, then apply .env overrides."""
+    os.environ.setdefault("GUARDIAN_INSECURE_SSL", "1")
+    os.environ.setdefault("GUARDIAN_BREACH_PROVIDER", "auto")
+    _load_env_file()
+
+
 def _dashboard_url(host: str, port: int) -> str:
-    return f"http://{host}:{port}/"
+    try:
+        from guardian.web.server import dashboard_base_url
+        return dashboard_base_url(host, port)
+    except ImportError:
+        return f"http://{host}:{port}/"
 
 
 def _probe_server(host: str, port: int, timeout: float = 1.5) -> bool:
@@ -940,9 +970,8 @@ def _open_browser(url: str) -> None:
 
 
 def _spawn_serve_background(host: str, port: int, extra_args: tuple[str, ...] = ()) -> subprocess.Popen:
+    _apply_serve_env_defaults()
     env = os.environ.copy()
-    env.setdefault("GUARDIAN_INSECURE_SSL", "1")
-    env.setdefault("GUARDIAN_BREACH_PROVIDER", "auto")
     project_root = Path(__file__).resolve().parents[1]
     cmd = [
         sys.executable,
@@ -1036,6 +1065,7 @@ def serve(
     """Run Guardian + live web dashboard at http://HOST:PORT/"""
     global _responder, _web_state
 
+    _apply_serve_env_defaults()
     print_banner()
 
     try:
@@ -1055,7 +1085,7 @@ def serve(
     # before any monitor thread can emit alerts (avoids dropped live events).
     run_server_background(host=host, port=port, dashboard_state=_web_state)
     if not wait_for_server_ready(host, port):
-        console.print(f"[red]Dashboard failed to start on http://{host}:{port}[/red]")
+        console.print(f"[red]Dashboard failed to start on {_dashboard_url(host, port)}[/red]")
         console.print(
             "[yellow]The dashboard did not become ready in time — port may be in use "
             "or the server thread failed to start.[/yellow]"
@@ -1115,8 +1145,16 @@ def serve(
     console.print("[bold green]Guardian is active.[/bold green]")
     for m in modules_started:
         console.print(f"  [green]✓[/green] {m}")
+    url = _dashboard_url(host, port)
+    try:
+        from guardian.web.deploy import deployment_info
+        dep = deployment_info(host, port)
+        if dep["mode"] == "vps" and dep.get("public_host"):
+            console.print(f"  [dim]Public URL:[/dim] {dep['public_url']}")
+    except ImportError:
+        pass
     console.print(
-        f"\n  [bold]Dashboard:[/bold] [link=http://{host}:{port}]http://{host}:{port}[/link]\n"
+        f"\n  [bold]Dashboard:[/bold] [link={url}]{url}[/link]\n"
     )
     if open_browser:
         _open_browser(_dashboard_url(host, port))

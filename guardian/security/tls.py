@@ -36,7 +36,7 @@ def ensure_local_tls_cert() -> tuple[str, str] | None:
             "-out", str(cert_path),
             "-days", "825",
             "-nodes",
-            "-subj", "/CN=Guardian Local/O=Guardian/C=US",
+            "-subj", "/CN=Guardian Local/O=Guardian Sec Technologies/C=IN/ST=Haryana/L=Gurugram",
         ],
         check=True,
         capture_output=True,

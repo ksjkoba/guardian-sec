@@ -1,0 +1,140 @@
+# Guardian deployment — learniam.online
+
+## Domain layout (recommended)
+
+| Host | Purpose |
+|------|---------|
+| `learniam.online` | Marketing / landing (Hostinger website or redirect) |
+| `guardian.learniam.online` | Guardian dashboard (VPS) |
+
+The dashboard lives on a **subdomain** so the apex stays free for your main site and DNS stays simple.
+
+---
+
+## Hostinger DNS (do this in hPanel)
+
+1. **Domains** → **learniam.online** → **DNS / Nameservers** → **DNS records**
+2. Add:
+
+| Type | Name | Content | TTL |
+|------|------|---------|-----|
+| **A** | `guardian` | `<YOUR_VPS_PUBLIC_IP>` | 3600 |
+
+3. Optional apex (marketing on Hostinger hosting):
+
+| Type | Name | Content |
+|------|------|---------|
+| **A** | `@` | Hostinger hosting IP (from Websites panel) |
+
+DNS can take up to 24h; usually minutes. Check: `dig +short guardian.learniam.online`
+
+---
+
+## End-user deployment choices
+
+### Local PC (default)
+
+Personal machine — no public DNS required.
+
+```bash
+./scripts/setup-env.sh      # once
+./scripts/open-guardian.sh  # http://127.0.0.1:8765
+```
+
+`.env`:
+
+```env
+GUARDIAN_DEPLOY_MODE=local
+```
+
+### VPS (public)
+
+Remote server reachable at **https://guardian.learniam.online**
+
+```bash
+cp .env.vps.example .env
+# Edit .env — set TLS paths after certbot
+./scripts/serve-vps.sh
+```
+
+---
+
+## VPS TLS with Let's Encrypt
+
+On Ubuntu/Debian VPS (after DNS A record points to the server):
+
+```bash
+sudo apt update && sudo apt install -y nginx certbot python3-certbot-nginx
+```
+
+**Option A — Nginx reverse proxy (recommended)**
+
+`/etc/nginx/sites-available/guardian`:
+
+```nginx
+server {
+    listen 80;
+    server_name guardian.learniam.online;
+    location / {
+        proxy_pass http://127.0.0.1:8765;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+```bash
+sudo ln -s /etc/nginx/sites-available/guardian /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
+sudo certbot --nginx -d guardian.learniam.online
+```
+
+Run Guardian bound to localhost only:
+
+```env
+GUARDIAN_BIND_HOST=127.0.0.1
+GUARDIAN_PUBLIC_HOST=guardian.learniam.online
+GUARDIAN_PUBLIC_PORT=443
+GUARDIAN_DEPLOY_MODE=vps
+```
+
+**Option B — Guardian serves TLS directly**
+
+```bash
+sudo certbot certonly --standalone -d guardian.learniam.online
+```
+
+In `.env`:
+
+```env
+GUARDIAN_TLS_CERT=/etc/letsencrypt/live/guardian.learniam.online/fullchain.pem
+GUARDIAN_TLS_KEY=/etc/letsencrypt/live/guardian.learniam.online/privkey.pem
+GUARDIAN_BIND_HOST=0.0.0.0
+```
+
+---
+
+## Firewall
+
+```bash
+sudo ufw allow 22/tcp
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+# Only if not using nginx: sudo ufw allow 8765/tcp
+sudo ufw enable
+```
+
+---
+
+## Email mailboxes (Hostinger)
+
+Create in hPanel → **Emails** for contact addresses used in the Legal tab:
+
+- `grievance@learniam.online`
+- `privacy@learniam.online`
+- `security@learniam.online`

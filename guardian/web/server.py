@@ -274,8 +274,10 @@ def create_app(dashboard_state: "DashboardState | None" = None) -> "FastAPI":
             out["master_key_path"] = str(key_file_path()) if has_crypto() else None
             out["tls_enabled"] = bool(os.environ.get("GUARDIAN_TLS_CERT") or os.environ.get("GUARDIAN_TLS_AUTO"))
             from guardian.security.auth import api_auth_enabled, require_e2e_default
+            from guardian.web.deploy import deployment_info
             out["api_auth"] = api_auth_enabled()
             out["require_e2e"] = require_e2e_default()
+            out["deployment"] = deployment_info()
             return JSONResponse(out)
         except Exception as e:
             return JSONResponse({"e2e_available": False, "error": str(e)})
@@ -631,6 +633,16 @@ def create_app(dashboard_state: "DashboardState | None" = None) -> "FastAPI":
     return app
 
 
+def tls_enabled() -> bool:
+    from guardian.web.deploy import tls_enabled as _tls
+    return _tls()
+
+
+def dashboard_base_url(host: str = "127.0.0.1", port: int = 8765) -> str:
+    from guardian.web.deploy import dashboard_base_url as _url
+    return _url(host, port)
+
+
 def run_server(host: str = "127.0.0.1", port: int = 8765,
                dashboard_state: "DashboardState | None" = None) -> None:
     if not _HAS_FASTAPI:
@@ -691,15 +703,22 @@ def _websocket_ready(host: str, port: int) -> bool:
 
 def wait_for_server_ready(host: str = "127.0.0.1", port: int = 8765,
                           timeout: float = 15.0) -> bool:
-    """Return True once the HTTP API responds on /api/stats."""
+    """Return True once the HTTP(S) API responds on /api/stats."""
+    import ssl
     import urllib.error
     import urllib.request
 
-    url = f"http://{host}:{port}/api/stats"
+    scheme = "https" if tls_enabled() else "http"
+    url = f"{scheme}://{host}:{port}/api/stats"
+    ctx = None
+    if scheme == "https":
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
-            with urllib.request.urlopen(url, timeout=1.5) as resp:
+            with urllib.request.urlopen(url, timeout=1.5, context=ctx) as resp:
                 if resp.status == 200:
                     return True
         except (urllib.error.URLError, OSError, TimeoutError):

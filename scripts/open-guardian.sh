@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# One-click: start Guardian if needed, open http://127.0.0.1:8765 in your browser
+# One-click: start Guardian if needed, open dashboard in your browser
+# Live breach checks: GUARDIAN_BREACH_PROVIDER=auto (override in .env — see .env.example)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 source .venv/bin/activate

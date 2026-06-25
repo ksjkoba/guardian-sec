@@ -23,4 +23,9 @@ fi
 echo "  Dashboard: http://127.0.0.1:8765"
 echo ""
 
-exec python3 -m guardian.cli serve "$@"
+PYTHON=".venv/bin/python3"
+if [[ ! -x "$PYTHON" ]]; then
+  PYTHON=python3
+fi
+
+exec "$PYTHON" -m guardian.cli serve "$@"
