@@ -10,6 +10,7 @@ class _Env:
     KEYS = (
         "GUARDIAN_BREACH_PROVIDER",
         "GUARDIAN_BREACH_LIVE",
+        "GUARDIAN_ALLOW_HIBP",
         "HIBP_API_KEY",
         "GUARDIAN_XON_DAILY_LIMIT",
         "GUARDIAN_MULTI_DAILY_LIMIT",
@@ -53,9 +54,14 @@ def test_provider_live_flag():
         assert bl._provider_name() == "multi"
 
 
-def test_auto_prefers_hibp_when_key_set():
-    with _Env(GUARDIAN_BREACH_PROVIDER="auto", HIBP_API_KEY="test-key"):
+def test_auto_prefers_hibp_when_key_set_and_allowed():
+    with _Env(GUARDIAN_BREACH_PROVIDER="auto", HIBP_API_KEY="test-key", GUARDIAN_ALLOW_HIBP="1"):
         assert bl._provider_name() == "hibp"
+
+
+def test_auto_ignores_hibp_without_allow_flag():
+    with _Env(GUARDIAN_BREACH_PROVIDER="auto", HIBP_API_KEY="test-key"):
+        assert bl._provider_name() == "multi"
 
 
 def test_auto_falls_back_to_multi_without_key():

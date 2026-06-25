@@ -1,0 +1,19 @@
+[Unit]
+Description=Guardian Sec dashboard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=guardian
+Group=guardian
+WorkingDirectory=/opt/guardian/Sec
+Environment=GUARDIAN_DEPLOY_MODE=vps
+Environment=GUARDIAN_PUBLIC_HOST=guardian.learniam.online
+EnvironmentFile=-/opt/guardian/Sec/.env
+ExecStart=/opt/guardian/Sec/.venv/bin/python3 -m guardian.cli serve --host 127.0.0.1 --port 8765
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

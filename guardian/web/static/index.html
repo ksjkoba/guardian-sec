@@ -1637,7 +1637,19 @@
   body.tab-legal .sev-bar { display: none !important; }
   body.tab-legal .header-context.personal-only { display: none; }
   body.tab-legal .header-context.legal-only { display: inline; margin-left: 8px; font-size: 0.875rem; color: var(--text-dim); }
+  body.tab-settings .feed-only,
+  body.tab-settings .status-dot,
+  body.tab-settings #conn-label,
+  body.tab-settings .help-btn,
+  body.tab-settings .header-stats,
+  body.tab-settings .sev-bar { display: none !important; }
+  body.tab-settings .header-context.personal-only,
+  body.tab-settings .header-context.live-only,
+  body.tab-settings .header-context.legal-only { display: none; }
+  #tab-settings.tab-panel.active { overflow-y: auto; background: var(--bg); }
   .header-context.legal-only { display: none; }
+  .header-context.settings-only { display: none; }
+  body.tab-settings .header-context.settings-only { display: inline; margin-left: 8px; font-size: 0.875rem; color: var(--text-dim); }
 
   #tab-legal.tab-panel.active {
     overflow-y: auto;
@@ -1756,6 +1768,28 @@
     text-underline-offset: 2px;
   }
   .site-footer-links button:hover { color: var(--text); }
+
+  body.tab-settings .settings-only { display: inline; }
+  body.tab-settings .personal-only,
+  body.tab-settings .live-only,
+  body.tab-settings .legal-only,
+  body.tab-settings .feed-only { display: none !important; }
+  .settings-wrap { max-width: 720px; margin: 0 auto; padding: clamp(1.25rem, 4vw, 2.5rem); }
+  .settings-hero h1 { font-size: 1.75rem; margin: 0 0 8px; }
+  .settings-hero p { color: var(--text-dim); margin: 0 0 24px; line-height: 1.5; }
+  .settings-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px 24px; margin-bottom: 16px; }
+  .settings-card h2 { font-size: 1rem; margin: 0 0 16px; }
+  .settings-row { margin-bottom: 14px; }
+  .settings-row label { display: block; font-size: 0.8125rem; color: var(--text-dim); margin-bottom: 6px; }
+  .settings-row select,
+  .settings-row input[type="text"] { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface2); color: var(--text); font-size: 0.9375rem; }
+  .settings-row input[type="checkbox"] { margin-right: 8px; }
+  .settings-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 8px; }
+  .settings-btn { padding: 10px 18px; border-radius: 8px; border: none; cursor: pointer; font-weight: 600; font-size: 0.875rem; }
+  .settings-btn.primary { background: var(--primary); color: #fff; }
+  .settings-btn.secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+  .settings-note { font-size: 0.8125rem; color: var(--text-dim); margin-top: 12px; line-height: 1.45; }
+  #settings-status { font-size: 0.875rem; margin-top: 12px; min-height: 1.25em; }
 </style>
 </head>
 <body class="tab-personal">
@@ -1767,6 +1801,7 @@
   </div>
   <span class="header-context live-only">Threat intelligence</span>
   <span class="header-context legal-only">Legal &amp; information</span>
+  <span class="header-context settings-only">Settings</span>
   <div class="status-dot feed-only" id="dot"></div>
   <span id="conn-label" class="feed-only">connecting…</span>
   <button class="help-btn feed-only" id="help-toggle" title="Show introduction">? Help</button>
@@ -1802,6 +1837,7 @@
   <button class="app-tab active" data-tab="personal" id="tab-btn-personal">Personal Check</button>
   <button class="app-tab" data-tab="live" id="tab-btn-live">Threat Feed</button>
   <button class="app-tab" data-tab="legal" id="tab-btn-legal">Legal &amp; Info</button>
+  <button class="app-tab" data-tab="settings" id="tab-btn-settings">Settings</button>
 </nav>
 
 <div id="tab-personal" class="tab-panel active">
@@ -1929,7 +1965,7 @@
       <span class="count" id="camp-count">0</span>
     </div>
     <div class="panel-body" id="camp-list">
-      <div class="empty"><div class="empty-icon">📡</div>No campaigns yet.</div>
+      <div class="empty"><div class="empty-icon">📡</div>No campaigns yet — formed when 2+ related alerts share the same source within 5 min.</div>
     </div>
   </div>
 
@@ -1943,6 +1979,16 @@
         <button class="ioc-btn" id="ioc-check-btn">Check</button>
       </div>
       <div id="ioc-result"></div>
+    </div>
+    <div class="ioc-search file-scan-section">
+      <h4>File scan (ClamAV)</h4>
+      <p class="hint">Upload a file for local antivirus scan + hash threat-intel check. Files stay on your machine.</p>
+      <div class="ioc-input-row">
+        <input class="ioc-input" id="file-scan-input" type="file" />
+        <button class="ioc-btn" id="file-scan-btn" type="button">Scan</button>
+      </div>
+      <div id="file-scan-status" class="empty-hint"></div>
+      <div id="file-scan-result"></div>
     </div>
     <div class="feeds-section">
       <h4>Local threat cache</h4>
@@ -1984,6 +2030,7 @@
       <h2>About Guardian</h2>
       <p>Guardian is a local security dashboard that combines personal breach monitoring with live threat intelligence. It runs on your machine (default: <code style="font-family:var(--mono);font-size:0.85em">127.0.0.1</code>) and is designed for individuals and organisations in India who want visibility into data breaches and global security feeds while minimising unnecessary sharing of personal data.</p>
       <p>Personal Check queries public breach databases on your behalf. Threat Feed aggregates open-source intelligence (OSINT) from providers such as ThreatFox, URLhaus, and others. Guardian does not sell your digital personal data and does not use it for advertising.</p>
+      <div class="legal-callout"><strong>How Guardian compares:</strong> Guardian is not a replacement for Have I Been Pwned or VirusTotal — it is a <em>free, local, unified defense dashboard</em>. Breach checks use parallel free sources (XposedOrNot + HackMyIP). IOC scans combine 100k+ local threat feeds with live abuse.ch APIs (ThreatFox, URLhaus, MalwareBazaar). <strong>File uploads</strong> are scanned locally with ClamAV (when installed) plus hash intelligence — similar to a VirusTotal file check, but without sending your file to the cloud. HIBP is optional only if you explicitly enable it.</div>
       <div class="legal-callout"><strong>Data Fiduciary (operator):</strong> Guardian Sec Technologies Private Limited, a company incorporated under the Companies Act, 2013, with its registered office at Tower B, 4th Floor, DLF Cyber Park, Udyog Vihar Phase III, Gurugram, Haryana 122016, India.</div>
     </section>
 
@@ -2107,6 +2154,55 @@
       </ul>
       <p>We will endeavour to resolve grievances within timelines prescribed under the DPDP Act and applicable rules. If you are not satisfied with our response, you may approach the <strong>Data Protection Board of India</strong> as provided under the DPDP Act.</p>
     </section>
+  </div>
+</div>
+
+<div id="tab-settings" class="tab-panel">
+  <div class="settings-wrap">
+    <div class="settings-hero">
+      <h1>Settings</h1>
+      <p>Configure breach checks, deployment mode, and TLS. Saved to <code style="font-family:var(--mono);font-size:0.85em">~/.guardian/settings.json</code>.</p>
+    </div>
+    <div class="settings-card">
+      <h2>Platform</h2>
+      <div class="settings-row">
+        <label for="set-breach-provider">Breach check provider</label>
+        <select id="set-breach-provider">
+          <option value="auto">auto — HIBP if keyed, else free multi-source</option>
+          <option value="mock">mock — demo data for testing</option>
+          <option value="xposedornot">xposedornot — free email only</option>
+          <option value="multi">multi — XposedOrNot + HackMyIP</option>
+          <option value="hibp">hibp — requires HIBP_API_KEY in .env</option>
+        </select>
+      </div>
+      <div class="settings-row">
+        <label for="set-deploy-mode">Deployment mode</label>
+        <select id="set-deploy-mode">
+          <option value="local">local — this PC only (127.0.0.1)</option>
+          <option value="vps">vps — public subdomain (e.g. guardian.learniam.online)</option>
+        </select>
+      </div>
+      <div class="settings-row">
+        <label for="set-public-host">Public hostname (VPS)</label>
+        <input type="text" id="set-public-host" placeholder="guardian.learniam.online" />
+      </div>
+      <div class="settings-row">
+        <label><input type="checkbox" id="set-insecure-ssl" /> Allow insecure SSL (corporate proxy)</label>
+      </div>
+      <div class="settings-row">
+        <label><input type="checkbox" id="set-tls-auto" /> Auto TLS (self-signed HTTPS)</label>
+      </div>
+      <div class="settings-actions">
+        <button type="button" class="settings-btn primary" id="settings-save-btn">Save settings</button>
+        <button type="button" class="settings-btn secondary" id="settings-export-btn">Export dashboard JSON</button>
+      </div>
+      <p class="settings-note">Some changes take effect after restarting Guardian (<code style="font-family:var(--mono);font-size:0.85em">pkill -f guardian.cli serve</code> then <code style="font-family:var(--mono);font-size:0.85em">./scripts/open-guardian.sh</code>).</p>
+      <div id="settings-status"></div>
+    </div>
+    <div class="settings-card">
+      <h2>Data</h2>
+      <p class="settings-note" style="margin-top:0">Alerts and campaigns are stored in <code style="font-family:var(--mono);font-size:0.85em">~/.guardian/dashboard.db</code> and restored on restart.</p>
+    </div>
   </div>
 </div>
 
@@ -2252,10 +2348,11 @@ async function loadSnapshotRest() {
       secureFetch('/api/stats'),
     ]);
     if (!ar.ok) return;
+    const campaignsData = cr.ok ? await cr.json() : [];
     handleSnapshot({
       type: 'snapshot',
       alerts: await ar.json(),
-      campaigns: await cr.json(),
+      campaigns: Array.isArray(campaignsData) ? campaignsData : [],
       stats: await sr.json(),
     });
   } catch (e) {
@@ -2603,7 +2700,7 @@ function renderCampaigns() {
   document.getElementById('camp-count').textContent = active.length;
 
   if (!active.length) {
-    list.innerHTML = '<div class="empty"><div class="empty-icon">📡</div>No campaigns yet.</div>';
+    list.innerHTML = '<div class="empty"><div class="empty-icon">📡</div>No campaigns yet — formed when 2+ related alerts share the same source within 5 min.</div>';
     return;
   }
   list.innerHTML = '';
@@ -2733,6 +2830,58 @@ async function loadGlobalFeedStatus() {
   } catch {}
 }
 
+// ── File scan (ClamAV) ────────────────────────────────────────────────────────
+async function loadFileScanStatus() {
+  const el = document.getElementById('file-scan-status');
+  if (!el) return;
+  try {
+    const r = await secureFetch('/api/scan/status');
+    if (!r.ok) return;
+    const s = await r.json();
+    el.textContent = s.available
+      ? `ClamAV ready — ${s.version || s.binary}`
+      : `ClamAV not installed. Run: ./scripts/install-clamav.sh`;
+  } catch {}
+}
+
+async function scanUploadedFile() {
+  const input = document.getElementById('file-scan-input');
+  const result = document.getElementById('file-scan-result');
+  const file = input?.files?.[0];
+  if (!file || !result) return;
+  result.textContent = 'Scanning locally…';
+  const form = new FormData();
+  form.append('file', file);
+  try {
+    const r = await secureFetch('/api/scan/file', { method: 'POST', body: form });
+    const data = await r.json();
+    if (data.error) { result.textContent = 'Error: ' + data.error; return; }
+    const clam = data.clamav || {};
+    const hi = data.hash_intel || {};
+    let html = `<div style="margin-bottom:6px"><strong>${esc(data.filename)}</strong> · ${(data.size_bytes||0).toLocaleString()} bytes</div>`;
+    html += `<div style="font-size:11px;color:var(--text-dim);word-break:break-all">SHA-256: ${esc(data.sha256)}</div>`;
+    if (data.verdict === 'MALICIOUS') {
+      html += `<div class="ioc-hit" style="margin-top:8px">⚠ MALICIOUS</div>`;
+      if (clam.signatures?.length) html += `<div style="font-size:12px;margin-top:4px">ClamAV: ${clam.signatures.map(esc).join(', ')}</div>`;
+    } else if (data.verdict === 'SUSPICIOUS') {
+      html += `<div style="color:var(--high);margin-top:8px">⚠ SUSPICIOUS — hash intel</div>`;
+    } else if (data.verdict === 'CLEAN') {
+      html += `<div class="ioc-clean" style="margin-top:8px">✓ CLEAN</div>`;
+    } else {
+      html += `<div style="margin-top:8px">${esc(data.plain_summary || data.verdict)}</div>`;
+    }
+    if (hi.live_hits?.length) {
+      html += `<div style="font-size:11px;margin-top:6px">Hash intel: ${hi.live_hits.map(h => esc(h.source)).join(' · ')}</div>`;
+    }
+    html += `<div style="font-size:10px;color:var(--text-dim);margin-top:6px">${esc(data.plain_summary || '')}</div>`;
+    result.innerHTML = html;
+  } catch {
+    result.textContent = 'Scan failed.';
+  }
+}
+
+document.getElementById('file-scan-btn')?.addEventListener('click', scanUploadedFile);
+
 // ── IOC check ─────────────────────────────────────────────────────────────────
 document.getElementById('ioc-check-btn').addEventListener('click', checkIoc);
 document.getElementById('ioc-input').addEventListener('keydown', e => { if(e.key==='Enter') checkIoc(); });
@@ -2741,7 +2890,7 @@ async function checkIoc() {
   const val = document.getElementById('ioc-input').value.trim();
   const result = document.getElementById('ioc-result');
   if (!val) return;
-  result.textContent = 'Checking…';
+  result.textContent = 'Scanning across local feeds + live APIs…';
   try {
     const r = await secureFetch('/api/ioc/check', {
       method: 'POST',
@@ -2750,19 +2899,27 @@ async function checkIoc() {
     });
     const data = await r.json();
     if (data.error) { result.textContent = 'Error: ' + data.error; return; }
+    const srcs = (data.sources_checked || []).join(' · ');
+    const live = (data.live_hits || []).map(h =>
+      `<span class="ioc-badge">${esc(h.source)}</span>${h.malware_family ? `<span class="ioc-badge family">${esc(h.malware_family)}</span>` : ''}`
+    ).join(' ');
     if (data.malicious) {
-      result.innerHTML = `<span class="ioc-hit">⚠ MALICIOUS — ${data.matches.length} confirmed TI feed match(es)</span><br>`
-        + data.matches.map(m =>
-            `<span class="ioc-badge">${m.feed}</span>${m.malware_family ? `<span class="ioc-badge family">${m.malware_family}</span>` : ''}`
-          ).join(' ');
+      const local = (data.matches || []).map(m =>
+        `<span class="ioc-badge">${esc(m.feed)}</span>${m.malware_family ? `<span class="ioc-badge family">${esc(m.malware_family)}</span>` : ''}`
+      ).join(' ');
+      result.innerHTML = `<span class="ioc-hit">⚠ MALICIOUS (${data.confidence}% confidence)</span><br>`
+        + (live ? `<span style="font-size:11px;color:var(--text-dim)">Live: ${live}</span><br>` : '')
+        + (local ? `<span style="font-size:11px;color:var(--text-dim)">Local feeds: ${local}</span><br>` : '')
+        + `<span style="font-size:10px;color:var(--text-dim)">${esc(srcs)} · ${data.scan_time_ms || 0}ms</span>`;
     } else if (data.suspicious && data.suspicious_platform) {
       const sp = data.suspicious_platform;
       result.innerHTML =
         `<span style="color:var(--high)">⚠ SUSPICIOUS — ${sp.category} (${sp.confidence}% confidence)</span><br>`
         + `<span style="color:var(--text-dim);font-size:11px">${esc(sp.reason)}</span><br>`
-        + `<span style="color:var(--text-dim);font-size:10px;font-style:italic">Common abuse: ${esc(sp.example_abuse)}</span>`;
+        + `<span style="font-size:10px;color:var(--text-dim)">${esc(srcs)} · ${data.scan_time_ms || 0}ms</span>`;
     } else {
-      result.innerHTML = `<span class="ioc-clean">✓ CLEAN — not found in ${(data.total_iocs_checked||0).toLocaleString()} IOCs or suspicious platform list</span>`;
+      result.innerHTML = `<span class="ioc-clean">✓ CLEAN — checked ${esc(srcs)} (${(data.total_iocs_checked||0).toLocaleString()} local IOCs)</span>`
+        + `<br><span style="font-size:10px;color:var(--text-dim)">${data.scan_time_ms || 0}ms</span>`;
     }
   } catch(e) {
     result.textContent = 'Request failed.';
@@ -2833,12 +2990,14 @@ let breachProviderInfo = null;
 function switchAppTab(tab) {
   document.querySelectorAll('.app-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === `tab-${tab}`));
-  document.body.className = tab === 'live' ? 'tab-live' : tab === 'legal' ? 'tab-legal' : 'tab-personal';
+  const bodyClass = { live: 'tab-live', legal: 'tab-legal', settings: 'tab-settings' }[tab] || 'tab-personal';
+  document.body.className = bodyClass;
   if (tab === 'live') loadGlobalFeedStatus();
   if (tab === 'legal') {
     const panel = document.getElementById('tab-legal');
     panel?.scrollTo(0, 0);
   }
+  if (tab === 'settings') loadSettingsForm();
 }
 
 function openLegalSection(id) {
@@ -2974,7 +3133,7 @@ function applyBreachTypeAvailability(data) {
   const hint = document.getElementById('breach-type-hint');
   if (hint) {
     if (live && data.phone === false) {
-      hint.textContent = 'Live databases cover email only. Phone and username are disabled until a provider supports them.';
+      hint.textContent = 'Live free stack: email + username (XposedOrNot). Phone is not available yet.';
       hint.style.display = 'block';
     } else {
       hint.textContent = '';
@@ -3288,6 +3447,68 @@ document.getElementById('watchlist-recheck-btn').addEventListener('click', async
 document.getElementById('password-check-btn').addEventListener('click', runPasswordCheck);
 document.getElementById('password-input').addEventListener('keydown', e => { if (e.key === 'Enter') runPasswordCheck(); });
 
+// ── Settings ─────────────────────────────────────────────────────────────────
+async function loadSettingsForm() {
+  const status = document.getElementById('settings-status');
+  try {
+    const r = await secureFetch('/api/settings');
+    if (!r.ok) return;
+    const s = await r.json();
+    document.getElementById('set-breach-provider').value = s.GUARDIAN_BREACH_PROVIDER || 'auto';
+    document.getElementById('set-deploy-mode').value = s.GUARDIAN_DEPLOY_MODE || 'local';
+    document.getElementById('set-public-host').value = s.GUARDIAN_PUBLIC_HOST || '';
+    document.getElementById('set-insecure-ssl').checked = !!s.GUARDIAN_INSECURE_SSL;
+    document.getElementById('set-tls-auto').checked = !!s.GUARDIAN_TLS_AUTO;
+    if (status) status.textContent = s.hibp_configured ? 'HIBP API key detected in environment.' : '';
+  } catch (e) {
+    if (status) status.textContent = 'Could not load settings.';
+  }
+}
+
+async function saveSettingsForm() {
+  const status = document.getElementById('settings-status');
+  const body = {
+    GUARDIAN_BREACH_PROVIDER: document.getElementById('set-breach-provider').value,
+    GUARDIAN_DEPLOY_MODE: document.getElementById('set-deploy-mode').value,
+    GUARDIAN_PUBLIC_HOST: document.getElementById('set-public-host').value.trim(),
+    GUARDIAN_INSECURE_SSL: document.getElementById('set-insecure-ssl').checked ? '1' : '0',
+    GUARDIAN_TLS_AUTO: document.getElementById('set-tls-auto').checked ? '1' : '0',
+  };
+  try {
+    const r = await secureFetch('/api/settings', { method: 'POST', body: JSON.stringify(body) });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Save failed');
+    if (status) {
+      status.textContent = data.restart_recommended
+        ? 'Saved. Restart Guardian for all changes to take effect.'
+        : 'Settings saved.';
+    }
+  } catch (e) {
+    if (status) status.textContent = String(e.message || e);
+  }
+}
+
+async function exportDashboardJson() {
+  const status = document.getElementById('settings-status');
+  try {
+    const r = await secureFetch('/api/export');
+    if (!r.ok) throw new Error('Export failed');
+    const data = await r.json();
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `guardian-export-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    if (status) status.textContent = 'Dashboard exported.';
+  } catch (e) {
+    if (status) status.textContent = String(e.message || e);
+  }
+}
+
+document.getElementById('settings-save-btn')?.addEventListener('click', saveSettingsForm);
+document.getElementById('settings-export-btn')?.addEventListener('click', exportDashboardJson);
+
 // ── Init (secure session required before any API call) ───────────────────────
 async function boot() {
   await initSecurity();
@@ -3298,6 +3519,7 @@ async function boot() {
   connect();
   loadSourceCatalog();
   loadGlobalFeedStatus();
+  loadFileScanStatus();
   setInterval(loadFeeds, 300_000);
   setInterval(loadGlobalFeedStatus, 60_000);
   setInterval(loadBreachAlerts, 60_000);

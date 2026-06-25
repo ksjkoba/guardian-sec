@@ -133,11 +133,20 @@ python3 -m guardian.cli serve
 
 1. **HIBP for prod** — set `HIBP_API_KEY` + `GUARDIAN_BREACH_PROVIDER=auto` when ready to ship
 2. **Phone/username live lookup** — no free API; tabs disabled in live mode until a provider is added
-3. **Restart required** after code changes — old in-memory state until fresh serve
+3. **Restart required** after some settings changes — use Settings tab or `.env`
 4. **OpenPhish / Tor exits** may fail behind corporate proxy — cache mitigates; VPN helps
 5. **Optional:** `ABUSEIPDB_API_KEY`, `NVD_API_KEY`, `ABUSE_CH_AUTH_KEY` for cross-verify enrichers
 6. **Local alerts** (logs/network) use Phi-3 SLM — wording can hallucinate; global feeds do not
 7. **scapy** not installed — network monitor disabled; install + sudo for local network alerts
+8. **Landing page** at `learniam.online` apex — not built yet (dashboard is `guardian.learniam.online`)
+
+### Recently added
+
+- **Persistence** — `~/.guardian/dashboard.db` restores alerts/campaigns across restarts
+- **Settings tab** — breach provider, deploy mode, TLS; saves to `~/.guardian/settings.json`
+- **Campaign narratives** — rule-based summary when SLM unavailable
+- **Export** — Settings → Export dashboard JSON
+- **VPS** — `scripts/guardian.service`, rate limiting via `GUARDIAN_RATE_LIMIT`
 
 ---
 

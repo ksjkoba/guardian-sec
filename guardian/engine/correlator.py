@@ -159,6 +159,47 @@ def _alerts_are_related(a: Alert, b: Alert, a_entities: set[str], b_entities: se
     return False
 
 
+def _rule_based_synthesis(campaign: "Campaign") -> dict[str, object]:
+    """Fallback narrative when SLM is unavailable or fails."""
+    tactics = " → ".join(campaign.tactics) if campaign.tactics else "unknown pattern"
+    modules = sorted({a.module for a in campaign.alerts})
+    entities = sorted(campaign.entities)[:6]
+    entity_str = ", ".join(entities) if entities else "none extracted"
+    narrative = (
+        f"Detected {len(campaign.alerts)} related alerts over "
+        f"{campaign.duration_secs:.0f} seconds from {', '.join(modules) or 'local monitors'}. "
+        f"Kill-chain progression: {tactics}. Shared indicators: {entity_str}."
+    )
+    sev = campaign.severity.value
+    return {
+        "title": f"Coordinated activity — {sev}",
+        "attack_narrative": narrative,
+        "severity": sev,
+        "immediate_actions": [
+            "Review all alerts in this campaign in the Threat Feed panel",
+            "Block or monitor shared source IPs if confirmed malicious",
+            "Check affected accounts or systems referenced in alert details",
+        ],
+    }
+
+
+def _apply_synthesis_data(campaign: "Campaign", data: dict[str, object]) -> None:
+    campaign.synthesis = str(data.get("attack_narrative", ""))
+    campaign.title = str(data.get("title", campaign.title or f"Campaign {campaign.id}"))
+    try:
+        campaign.severity = Severity(str(data.get("severity", campaign.severity.value)).upper())
+    except ValueError:
+        pass
+    campaign.status = CampaignStatus.SYNTHESIZED
+    campaign.metadata_extra = data.get("immediate_actions", [])  # type: ignore[attr-defined]
+
+
+def _ensure_baseline_narrative(campaign: "Campaign") -> None:
+    if campaign.synthesis:
+        return
+    _apply_synthesis_data(campaign, _rule_based_synthesis(campaign))
+
+
 # ─── SLM synthesis prompt ────────────────────────────────────────────────────
 
 def _build_synthesis_prompt(campaign: "Campaign") -> str:
@@ -271,9 +312,15 @@ class Correlator:
                 self._alert_to_campaign[alert.id] = new_campaign.id
                 campaign_to_return = new_campaign
 
-        # Outside the lock: trigger SLM synthesis if threshold reached
+        # Outside the lock: notify listeners and optionally trigger SLM synthesis
+        mature = len(campaign_to_return.alerts) >= CAMPAIGN_MIN_ALERTS
+        if mature and self._on_campaign:
+            _ensure_baseline_narrative(campaign_to_return)
+            self._on_campaign(campaign_to_return)
+
         if (
             self._use_slm
+            and mature
             and len(campaign_to_return.alerts) >= CAMPAIGN_SLM_THRESHOLD
             and campaign_to_return.status == CampaignStatus.ACTIVE
         ):
@@ -283,7 +330,7 @@ class Correlator:
                 daemon=True,
             ).start()
 
-        if len(campaign_to_return.alerts) >= CAMPAIGN_MIN_ALERTS:
+        if mature:
             return campaign_to_return
         return None
 
@@ -307,24 +354,20 @@ class Correlator:
             start = raw.find("{")
             end = raw.rfind("}") + 1
             if start == -1 or end == 0:
-                return
+                raise ValueError("no JSON in SLM response")
             data = json.loads(raw[start:end])
 
             with self._lock:
-                campaign.synthesis = data.get("attack_narrative", "")
-                campaign.title = data.get("title", f"Campaign {campaign.id}")
-                try:
-                    campaign.severity = Severity(data.get("severity", "HIGH").upper())
-                except ValueError:
-                    pass
-                campaign.status = CampaignStatus.SYNTHESIZED
-                campaign.metadata_extra = data.get("immediate_actions", [])  # type: ignore[attr-defined]
+                _apply_synthesis_data(campaign, data)
 
             if self._on_campaign:
                 self._on_campaign(campaign)
 
         except Exception:
-            pass
+            with self._lock:
+                _apply_synthesis_data(campaign, _rule_based_synthesis(campaign))
+            if self._on_campaign:
+                self._on_campaign(campaign)
 
     def get_campaigns(self, active_only: bool = True) -> list[Campaign]:
         with self._lock:

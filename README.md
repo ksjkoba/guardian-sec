@@ -25,6 +25,12 @@ Dashboard: http://127.0.0.1:8765
 - `docs/guardian-handoff.md` — project context and architecture
 - `docs/deployment-learniam.md` — domain and VPS deployment (`guardian.learniam.online`)
 
+## Features
+
+- **Settings tab** — configure provider, deploy mode, TLS (saved to `~/.guardian/settings.json`)
+- **Persistence** — alerts and campaigns survive restarts (`~/.guardian/dashboard.db`)
+- **Export** — download dashboard JSON from Settings
+
 ## Entry point
 
 ```bash

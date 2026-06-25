@@ -136,7 +136,18 @@ def test_three_alerts_escalate_severity():
     assert campaign.severity == Severity.CRITICAL
 
 
-def test_campaign_tracks_alert_count():
+def test_on_campaign_fired_at_min_alerts():
+    seen: list[Campaign] = []
+    c = Correlator(on_campaign=lambda camp: seen.append(camp), use_slm=False)
+    c.start()
+    ip = "8.8.8.8"
+    c.ingest(_make_alert(module="log_analyzer", metadata={"src_ip": ip}))
+    assert len(seen) == 0
+    c.ingest(_make_alert(module="network_monitor", metadata={"src_ip": ip}))
+    assert len(seen) == 1
+    assert len(seen[0].alerts) == 2
+
+
     c = Correlator(use_slm=False)
     c.start()
     ip = "7.7.7.7"

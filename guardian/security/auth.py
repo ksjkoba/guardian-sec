@@ -14,6 +14,7 @@ PUBLIC_API_PATHS = frozenset({
     "/api/stats",
     "/api/security/status",
     "/api/security/handshake",
+    "/api/test-alert",  # localhost dev helper (cli test-alert)
 })
 
 

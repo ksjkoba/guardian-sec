@@ -787,7 +787,10 @@ def _provider_name() -> str:
     if explicit == "hibp":
         return "hibp"
     if explicit in ("auto", "live") or (not explicit and live_flag):
-        return "hibp" if has_hibp else "multi"
+        allow_hibp = os.environ.get("GUARDIAN_ALLOW_HIBP", "").lower() in ("1", "true", "yes")
+        if has_hibp and allow_hibp and explicit != "multi":
+            return "hibp"
+        return "multi"
     if not explicit:
         return "mock"
     return explicit
@@ -812,17 +815,17 @@ def provider_info() -> dict[str, Any]:
             "live": True,
             "email": True,
             "phone": False,
-            "username": False,
-            "note": "Single free source — email only.",
+            "username": True,
+            "note": "Single free source — email and username.",
             "sources": ["XposedOrNot"],
         },
         "multi": {
-            "label": "Multi-source (free)",
+            "label": "Guardian Free Stack",
             "live": True,
             "email": True,
             "phone": False,
-            "username": False,
-            "note": "XposedOrNot + HackMyIP — exposed if any source reports a hit.",
+            "username": True,
+            "note": "XposedOrNot + HackMyIP — parallel free sources; no HIBP required.",
             "sources": ["XposedOrNot", "HackMyIP"],
         },
         "hibp": {
@@ -857,9 +860,14 @@ def provider_info() -> dict[str, Any]:
             "hibp": has_hibp,
         },
         "upgrade_hint": (
-            "Optional: set HIBP_API_KEY + GUARDIAN_BREACH_PROVIDER=auto for paid production lookups."
-            if not has_hibp and name in ("xposedornot", "multi")
-            else ""
+            "Optional: set GUARDIAN_ALLOW_HIBP=1 + HIBP_API_KEY for HIBP lookups."
+            if not os.environ.get("GUARDIAN_ALLOW_HIBP", "").lower() in ("1", "true", "yes")
+            and has_hibp and name == "multi"
+            else (
+                "Optional: set HIBP_API_KEY + GUARDIAN_BREACH_PROVIDER=hibp for paid production lookups."
+                if not has_hibp and name in ("xposedornot", "multi")
+                else ""
+            )
         ),
     }
 
@@ -1169,6 +1177,39 @@ def _query_xon_raw(email: str) -> dict[str, Any]:
     return {"ok": True, "breaches": breaches, "pastes": [], "exposed": True, "error": None}
 
 
+def _query_xon_username_raw(username: str) -> dict[str, Any]:
+    """XposedOrNot free username breach check."""
+    key = username.strip().lower()
+    q = urllib.parse.quote(key, safe="")
+    status, data = _http_get_json(f"{XON_API_BASE}/v1/check-username/{q}")
+    if status == 429:
+        return {"ok": False, "error": "rate_limit", "breaches": [], "exposed": False}
+    if status == 0 or not isinstance(data, dict):
+        msg = data.get("error", "Could not reach XposedOrNot") if isinstance(data, dict) else "Network error"
+        return {"ok": False, "error": msg, "breaches": [], "exposed": False}
+    if status == 404 or str(data.get("Error") or "").lower() == "not found":
+        return {"ok": True, "breaches": [], "exposed": False, "error": None}
+    names = data.get("breaches") or data.get("Breaches") or []
+    if isinstance(names, dict):
+        names = list(names.keys())
+    if not isinstance(names, list):
+        names = []
+    breaches = [
+        BreachIncident(
+            name=str(name),
+            breach_date="unknown",
+            added_date="unknown",
+            data_classes=[],
+            description=f"Username found in {name} breach index (XposedOrNot).",
+            source_provider="XposedOrNot",
+        )
+        for name in names
+        if name
+    ]
+    exposed = bool(breaches) or bool(data.get("exposed"))
+    return {"ok": True, "breaches": breaches, "exposed": exposed, "error": None}
+
+
 def _query_hackmyip_raw(email: str) -> dict[str, Any]:
     """Query HackMyIP free breach API (no key)."""
     key = email.strip().lower()
@@ -1345,19 +1386,76 @@ def _multi_lookup_email(email: str) -> BreachCheckResult:
 
 
 def _multi_lookup(identifier_type: IdentifierType, value: str) -> BreachCheckResult:
-    if identifier_type != "email":
-        masked = mask_phone(value) if identifier_type == "phone" else mask_username(value.strip())
+    if identifier_type == "phone":
         return BreachCheckResult(
             status="invalid",
-            identifier_type=identifier_type,
-            identifier_masked=masked,
+            identifier_type="phone",
+            identifier_masked=mask_phone(value),
             identifier_hash=_hash_identifier(value),
-            plain_summary="Multi-source mode supports email only (XposedOrNot + HackMyIP).",
+            plain_summary="Phone checks are not available on the free stack yet.",
             checked_at=time.time(),
             provider="multi",
-            notes=["Phone and username are not available in free live mode."],
+            notes=["Use mock mode for phone demos."],
         )
+    if identifier_type == "username":
+        return _xon_lookup_username(value.strip())
     return _multi_lookup_email(value.strip().lower())
+
+
+def _xon_lookup_username(username: str) -> BreachCheckResult:
+    key = username.strip().lower()
+    masked = mask_username(username)
+    h = _hash_identifier(key)
+    now = time.time()
+    if _quota_exceeded("multi"):
+        q = quota_status("multi")
+        return BreachCheckResult(
+            status="error",
+            identifier_type="username",
+            identifier_masked=masked,
+            identifier_hash=h,
+            plain_summary=f"Daily limit reached ({q['used']}/{q['limit']}).",
+            checked_at=now,
+            provider="multi",
+        )
+    _record_api_call("multi")
+    raw = _query_xon_username_raw(key)
+    if not raw.get("ok"):
+        return BreachCheckResult(
+            status="error",
+            identifier_type="username",
+            identifier_masked=masked,
+            identifier_hash=h,
+            plain_summary=str(raw.get("error", "Username lookup failed")),
+            checked_at=now,
+            provider="multi",
+            notes=["Source: XposedOrNot username API."],
+        )
+    breaches = raw.get("breaches") or []
+    if not raw.get("exposed"):
+        return BreachCheckResult(
+            status="clean",
+            identifier_type="username",
+            identifier_masked=masked,
+            identifier_hash=h,
+            plain_summary="No breaches found for username via XposedOrNot.",
+            checked_at=now,
+            provider="multi",
+            sources_checked=["XposedOrNot"],
+        )
+    return BreachCheckResult(
+        status="exposed",
+        identifier_type="username",
+        identifier_masked=masked,
+        identifier_hash=h,
+        breach_count=len(breaches),
+        breaches=breaches,
+        plain_summary=f"Username found in {len(breaches)} breach record(s) via XposedOrNot.",
+        recommendations=_recommendations("exposed", breaches, live=True),
+        checked_at=now,
+        provider="multi",
+        sources_checked=["XposedOrNot"],
+    )
 
 
 def _xon_lookup_email(email: str) -> BreachCheckResult:

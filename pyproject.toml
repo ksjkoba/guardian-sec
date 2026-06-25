@@ -34,7 +34,7 @@ full = [
 ]
 network = ["scapy>=2.5"]
 slm = ["llama-cpp-python>=0.2.57"]
-web = ["fastapi>=0.111", "uvicorn[standard]>=0.29", "cryptography>=42.0"]
+web = ["fastapi>=0.111", "uvicorn[standard]>=0.29", "cryptography>=42.0", "python-multipart>=0.0.9"]
 
 [project.scripts]
 guardian = "guardian.cli:main"

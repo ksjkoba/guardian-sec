@@ -17,7 +17,7 @@ from guardian.engine.correlator import Campaign, CampaignStatus
 
 try:
     from contextlib import asynccontextmanager
-    from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+    from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect, File, UploadFile
     from fastapi.responses import HTMLResponse, JSONResponse
     from fastapi.staticfiles import StaticFiles
     import uvicorn
@@ -42,6 +42,39 @@ class DashboardState:
         }
         self._broadcast_queue: "asyncio.Queue | None" = None
         self._loop: "asyncio.AbstractEventLoop | None" = None
+        self._load_persisted()
+
+    def _load_persisted(self) -> None:
+        try:
+            from guardian.web.persistence import init_db, load_alerts, load_campaigns
+            init_db()
+            self._alerts = load_alerts(self.MAX_ALERTS)
+            self._campaigns = load_campaigns()
+            self._recompute_stats()
+            if self._alerts or self._campaigns:
+                print(
+                    f"[dashboard] restored {len(self._alerts)} alert(s), "
+                    f"{len(self._campaigns)} campaign(s) from disk"
+                )
+        except Exception as e:
+            print(f"[dashboard] persistence load skipped: {e}")
+
+    def _recompute_stats(self) -> None:
+        counts = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
+        ioc_hits = 0
+        for a in self._alerts:
+            sev = str(a.get("severity", "INFO")).lower()
+            if sev in counts:
+                counts[sev] += 1
+            if a.get("ioc_matches"):
+                ioc_hits += 1
+        self._stats.update({
+            "total_alerts": len(self._alerts),
+            "total_campaigns": len(self._campaigns),
+            "ioc_hits": ioc_hits,
+            **counts,
+            "uptime_start": time.time(),
+        })
 
     def set_queue(self, q: "asyncio.Queue", loop: "asyncio.AbstractEventLoop") -> None:
         self._broadcast_queue = q
@@ -76,6 +109,11 @@ class DashboardState:
             self._stats[sev_key] = self._stats.get(sev_key, 0) + 1
             if alert.metadata.get("ioc_matches"):
                 self._stats["ioc_hits"] += 1
+        try:
+            from guardian.web.persistence import save_alert
+            save_alert(d)
+        except Exception:
+            pass
         self._emit({"type": "alert", "data": d})
 
     def ingest_campaign(self, campaign: Campaign) -> None:
@@ -87,6 +125,11 @@ class DashboardState:
             else:
                 self._campaigns.append(d)
                 self._stats["total_campaigns"] += 1
+        try:
+            from guardian.web.persistence import save_campaign
+            save_campaign(d)
+        except Exception:
+            pass
         self._emit({"type": "campaign", "data": d})
 
     def get_alerts(self, limit: int = 100, severity: "str | None" = None) -> list[dict]:
@@ -214,8 +257,12 @@ def create_app(dashboard_state: "DashboardState | None" = None) -> "FastAPI":
     @app.middleware("http")
     async def guardian_security_layer(request: "Request", call_next):  # type: ignore[no-untyped-def]
         from guardian.security.auth import PUBLIC_API_PATHS, api_auth_enabled, verify_request_token
+        from guardian.web.ratelimit import allow_request
 
         path = request.url.path
+        client = request.client.host if request.client else "unknown"
+        if not allow_request(client):
+            return JSONResponse({"error": "rate limit exceeded"}, status_code=429)
         if api_auth_enabled() and path.startswith("/api/") and path not in PUBLIC_API_PATHS:
             token = request.headers.get("X-Guardian-Session", "")
             if sessions is None or not verify_request_token(sessions, token):
@@ -260,6 +307,30 @@ def create_app(dashboard_state: "DashboardState | None" = None) -> "FastAPI":
     @app.get("/api/stats")
     async def get_stats() -> "JSONResponse":
         return JSONResponse(ds.get_stats())
+
+    @app.get("/api/settings")
+    async def get_settings() -> "JSONResponse":
+        from guardian.web.settings import effective_settings
+        return JSONResponse(effective_settings())
+
+    @app.post("/api/settings")
+    async def post_settings(body: dict) -> "JSONResponse":
+        from guardian.web.settings import RESTART_HINT_KEYS, save_user_settings
+        saved = save_user_settings(body or {})
+        return JSONResponse({
+            "ok": True,
+            "settings": saved,
+            "restart_recommended": any(k in (body or {}) for k in RESTART_HINT_KEYS),
+        })
+
+    @app.get("/api/export")
+    async def export_dashboard() -> "JSONResponse":
+        from guardian.web.persistence import export_snapshot
+        return JSONResponse(export_snapshot(
+            ds.get_alerts(limit=ds.MAX_ALERTS),
+            ds.get_campaigns(),
+            ds.get_stats(),
+        ))
 
     @app.get("/api/security/status")
     async def security_status() -> "JSONResponse":
@@ -329,9 +400,14 @@ def create_app(dashboard_state: "DashboardState | None" = None) -> "FastAPI":
             title=str(payload.get("title", "Live feed test")),
             description=str(payload.get("description", "Injected via /api/test-alert")),
             severity=severity,
-            metadata={"verified": False, "verified_detail": "This is a test alert, not from a live feed."},
+            metadata=payload.get("metadata") or {"verified": False, "verified_detail": "This is a test alert, not from a live feed."},
         )
         ds.ingest_alert(alert)
+        try:
+            from guardian.engine.correlator import get_correlator
+            get_correlator().ingest(alert)
+        except Exception:
+            pass
         return JSONResponse({"ok": True, "id": alert.id, "title": alert.title})
 
     @app.post("/api/global-feed/push")
@@ -584,27 +660,27 @@ def create_app(dashboard_state: "DashboardState | None" = None) -> "FastAPI":
         if not value:
             return JSONResponse({"error": "value required"}, status_code=400)
         try:
-            from guardian.intel.feeds import get_index
-            from guardian.intel.heuristics import check_value
-            index = get_index()
-            matches = index.lookup(value)
-            suspicious = check_value(value)
-            return JSONResponse({
-                "value": value,
-                "malicious": len(matches) > 0,
-                "suspicious": suspicious is not None,
-                "verdict": "MALICIOUS" if matches else ("SUSPICIOUS" if suspicious else "CLEAN"),
-                "matches": [
-                    {"feed": m.feed, "ioc_type": m.ioc_type,
-                     "malware_family": m.malware_family, "confidence": m.confidence}
-                    for m in matches
-                ],
-                "suspicious_platform": {
-                    "category": suspicious.category, "reason": suspicious.reason,
-                    "confidence": suspicious.confidence, "example_abuse": suspicious.example_abuse,
-                } if suspicious else None,
-                "total_iocs_checked": index.total_iocs,
-            })
+            from guardian.intel.unified_scan import scan_ioc
+            return JSONResponse(scan_ioc(value))
+        except Exception as e:
+            return JSONResponse({"error": str(e)}, status_code=500)
+
+    @app.get("/api/scan/status")
+    async def scan_status() -> "JSONResponse":
+        from guardian.intel.clamav_scan import clamav_status
+        return JSONResponse(clamav_status())
+
+    @app.post("/api/scan/file")
+    async def scan_file_upload(file: "UploadFile" = File(...)) -> "JSONResponse":
+        from guardian.intel.clamav_scan import scan_file_bytes
+        try:
+            content = await file.read()
+        except Exception as e:
+            return JSONResponse({"error": str(e)}, status_code=400)
+        if not content:
+            return JSONResponse({"error": "empty file"}, status_code=400)
+        try:
+            return JSONResponse(scan_file_bytes(content, file.filename or "upload"))
         except Exception as e:
             return JSONResponse({"error": str(e)}, status_code=500)
 

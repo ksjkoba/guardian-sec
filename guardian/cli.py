@@ -727,6 +727,36 @@ def feed_status_cmd() -> None:
 
 
 
+# ─── scan-file ────────────────────────────────────────────────────────────────
+
+@cli.command("scan-file")
+@click.argument("path", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+def scan_file_cmd(path: Path) -> None:
+    """Scan a file locally with ClamAV and hash threat intelligence."""
+    from guardian.intel.clamav_scan import clamav_status, scan_file_bytes
+
+    status = clamav_status()
+    if not status["available"]:
+        console.print("[yellow]ClamAV not installed.[/yellow] Run: ./scripts/install-clamav.sh")
+        console.print("[dim]Continuing with hash intelligence only…[/dim]")
+
+    content = path.read_bytes()
+    result = scan_file_bytes(content, path.name)
+    verdict = result.get("verdict", "UNKNOWN")
+    style = {"MALICIOUS": "red bold", "SUSPICIOUS": "yellow", "CLEAN": "green"}.get(verdict, "white")
+    console.print(f"[{style}]{verdict}[/{style}]  {path.name} ({len(content):,} bytes)")
+    console.print(f"[dim]SHA-256:[/dim] {result.get('sha256', '')}")
+    console.print(result.get("plain_summary", ""))
+    clam = result.get("clamav") or {}
+    if clam.get("signatures"):
+        console.print(f"[red]ClamAV:[/red] {', '.join(clam['signatures'])}")
+    hi = result.get("hash_intel") or {}
+    if hi.get("live_hits"):
+        console.print(f"[yellow]Hash intel:[/yellow] {', '.join(h['source'] for h in hi['live_hits'])}")
+    if verdict in ("MALICIOUS", "SUSPICIOUS"):
+        raise SystemExit(1)
+
+
 # ─── test-alert ───────────────────────────────────────────────────────────────
 
 @cli.command("test-alert")
@@ -935,6 +965,11 @@ def _apply_serve_env_defaults() -> None:
     os.environ.setdefault("GUARDIAN_INSECURE_SSL", "1")
     os.environ.setdefault("GUARDIAN_BREACH_PROVIDER", "auto")
     _load_env_file()
+    try:
+        from guardian.web.settings import apply_saved_settings
+        apply_saved_settings()
+    except ImportError:
+        pass
 
 
 def _dashboard_url(host: str, port: int) -> str:
@@ -1080,6 +1115,9 @@ def serve(
 
     # Set up dashboard state
     _web_state = state
+
+    # Wire correlator before any module can emit alerts
+    get_correlator(on_campaign=_on_campaign)
 
     # Start web server BEFORE defense modules so the broadcast queue is wired
     # before any monitor thread can emit alerts (avoids dropped live events).

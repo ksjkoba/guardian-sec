@@ -131,6 +131,30 @@ sudo ufw enable
 
 ---
 
+## Auto-start (systemd)
+
+Copy `scripts/guardian.service` to `/etc/systemd/system/guardian.service`, adjust paths/user, then:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now guardian
+sudo systemctl status guardian
+```
+
+Pair with nginx + certbot (Option A above). Guardian binds to `127.0.0.1:8765`; nginx serves HTTPS on 443.
+
+Rate limiting: set `GUARDIAN_RATE_LIMIT=120` in `.env` (requests/min per IP, VPS mode only).
+
+---
+
+## Persistence
+
+Alerts and campaigns are stored in `~/.guardian/dashboard.db` and restored when Guardian restarts.
+
+User settings from the dashboard **Settings** tab are saved to `~/.guardian/settings.json`.
+
+---
+
 ## Email mailboxes (Hostinger)
 
 Create in hPanel → **Emails** for contact addresses used in the Legal tab:
