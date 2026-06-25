@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="guardian-ui-version" content="11">
+<meta name="guardian-ui-version" content="12">
 <title>Guardian — Security Dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -1627,6 +1627,135 @@
   }
   .clean-result-hero { text-align: center; padding: 0.5rem 0 1rem; }
   .clean-result-hero .hero-icon { margin-bottom: 12px; }
+
+  /* ── Legal & Info tab ── */
+  body.tab-legal .feed-only,
+  body.tab-legal .status-dot,
+  body.tab-legal #conn-label,
+  body.tab-legal .help-btn,
+  body.tab-legal .header-stats,
+  body.tab-legal .sev-bar { display: none !important; }
+  body.tab-legal .header-context.personal-only { display: none; }
+  body.tab-legal .header-context.legal-only { display: inline; margin-left: 8px; font-size: 0.875rem; color: var(--text-dim); }
+  .header-context.legal-only { display: none; }
+
+  #tab-legal.tab-panel.active {
+    overflow-y: auto;
+    background: var(--bg);
+  }
+  .legal-wrap {
+    max-width: 56rem;
+    margin: 0 auto;
+    padding: clamp(1.5rem, 4vw, 2.5rem) clamp(1.25rem, 4vw, 2rem) 3rem;
+  }
+  .legal-hero {
+    margin-bottom: 2rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .legal-hero h1 {
+    font-size: clamp(1.5rem, 3vw, 1.875rem);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 0.5rem;
+  }
+  .legal-hero p { color: var(--text-dim); font-size: 1rem; line-height: 1.6; max-width: 42rem; }
+  .legal-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 2rem;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    padding: 12px 0;
+    background: linear-gradient(var(--bg) 70%, transparent);
+  }
+  .legal-nav a {
+    font-size: 0.8125rem;
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    text-decoration: none;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+  }
+  .legal-nav a:hover {
+    color: var(--text);
+    border-color: var(--border-strong);
+    background: var(--surface);
+  }
+  .legal-section {
+    margin-bottom: 2.5rem;
+    scroll-margin-top: 5rem;
+  }
+  .legal-section h2 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+    color: var(--text);
+  }
+  .legal-section h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 1.25rem 0 0.5rem;
+    color: var(--text);
+  }
+  .legal-section p,
+  .legal-section li {
+    font-size: 0.9375rem;
+    line-height: 1.65;
+    color: var(--text-dim);
+    margin-bottom: 0.75rem;
+  }
+  .legal-section ul { padding-left: 1.25rem; margin-bottom: 0.75rem; }
+  .legal-section li { margin-bottom: 0.35rem; }
+  .legal-updated {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-family: var(--mono);
+    margin-top: 0.5rem;
+  }
+  .legal-callout {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    margin: 1rem 0;
+    font-size: 0.875rem;
+    color: var(--text-dim);
+    line-height: 1.55;
+  }
+  .legal-callout strong { color: var(--text); }
+  .site-footer {
+    flex-shrink: 0;
+    border-top: 1px solid var(--border);
+    padding: 12px clamp(1.25rem, 4vw, 2.5rem);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    background: rgba(15, 20, 28, 0.6);
+  }
+  .site-footer-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+  }
+  .site-footer-links button {
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    font: inherit;
+    cursor: pointer;
+    padding: 0;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .site-footer-links button:hover { color: var(--text); }
 </style>
 </head>
 <body class="tab-personal">
@@ -1637,6 +1766,7 @@
     <span class="header-context personal-only">Personal breach monitoring</span>
   </div>
   <span class="header-context live-only">Threat intelligence</span>
+  <span class="header-context legal-only">Legal &amp; information</span>
   <div class="status-dot feed-only" id="dot"></div>
   <span id="conn-label" class="feed-only">connecting…</span>
   <button class="help-btn feed-only" id="help-toggle" title="Show introduction">? Help</button>
@@ -1671,6 +1801,7 @@
 <nav class="app-tabs">
   <button class="app-tab active" data-tab="personal" id="tab-btn-personal">Personal Check</button>
   <button class="app-tab" data-tab="live" id="tab-btn-live">Threat Feed</button>
+  <button class="app-tab" data-tab="legal" id="tab-btn-legal">Legal &amp; Info</button>
 </nav>
 
 <div id="tab-personal" class="tab-panel active">
@@ -1682,7 +1813,7 @@
         <input class="hero-input" id="breach-input" type="email" placeholder="Email address" autocomplete="email" />
         <button type="button" class="hero-btn" id="breach-check-btn">Check</button>
       </div>
-      <p class="privacy-note">Your email is not stored. Each check queries breach databases directly.</p>
+      <p class="privacy-note">Identifiers are encrypted in your browser before transmission. Watchlist entries are sealed with AES-256-GCM on this device.</p>
       <button type="button" class="sample-link hidden" id="try-sample-btn">Try a sample exposed email</button>
       <details class="advanced-check" id="advanced-check">
         <summary>Phone or username instead</summary>
@@ -1830,6 +1961,147 @@
 </div><!-- .main -->
 
 </div><!-- #tab-live -->
+
+<div id="tab-legal" class="tab-panel">
+  <div class="legal-wrap">
+    <div class="legal-hero">
+      <h1>Legal &amp; information</h1>
+      <p>How Guardian handles your data, what the service provides, and the terms that apply when you use this dashboard.</p>
+      <p class="legal-updated">Last updated: 24 June 2026</p>
+    </div>
+
+    <nav class="legal-nav" aria-label="Legal sections">
+      <a href="#about">About</a>
+      <a href="#privacy">Privacy</a>
+      <a href="#terms">Terms</a>
+      <a href="#data-protection">Data protection</a>
+      <a href="#cookies">Cookies &amp; storage</a>
+      <a href="#disclaimer">Disclaimer</a>
+      <a href="#contact">Contact</a>
+    </nav>
+
+    <section class="legal-section" id="about">
+      <h2>About Guardian</h2>
+      <p>Guardian is a local security dashboard that combines personal breach monitoring with live threat intelligence. It runs on your machine (default: <code style="font-family:var(--mono);font-size:0.85em">127.0.0.1</code>) and is designed for individuals and small teams who want visibility into data breaches and global security feeds without sending unnecessary data to third parties.</p>
+      <p>Personal Check queries public breach databases on your behalf. Threat Feed aggregates open-source intelligence (OSINT) from providers such as ThreatFox, URLhaus, CISA KEV, and others. Guardian does not sell your data and does not use it for advertising.</p>
+      <div class="legal-callout"><strong>Operator:</strong> Guardian Sec is provided as a self-hosted security tool. Replace this section with your organisation name, registered address, and jurisdiction when you deploy publicly.</div>
+    </section>
+
+    <section class="legal-section" id="privacy">
+      <h2>Privacy policy</h2>
+      <p>This policy describes how Guardian processes information when you use the dashboard. Because Guardian runs locally, most processing happens on your device rather than on a remote multi-tenant server.</p>
+
+      <h3>What we process</h3>
+      <ul>
+        <li><strong>Breach checks:</strong> Email addresses, phone numbers, or usernames you submit for lookup.</li>
+        <li><strong>Password checks:</strong> Only a partial SHA-1 hash fingerprint (k-anonymity) — never your full password.</li>
+        <li><strong>Watchlist:</strong> Identifiers you choose to monitor, encrypted at rest on this device.</li>
+        <li><strong>Threat feed:</strong> Public threat indicators (IPs, URLs, hashes) from global feeds — not personal data about you.</li>
+        <li><strong>Technical data:</strong> Session tokens, encrypted payloads, and optional local storage preferences (e.g. dismissing the welcome banner).</li>
+      </ul>
+
+      <h3>Legal bases (GDPR / UK GDPR)</h3>
+      <p>Where EU or UK data protection law applies, we rely on:</p>
+      <ul>
+        <li><strong>Legitimate interests</strong> — operating a security monitoring tool you have chosen to run, detecting exposure in breach databases, and displaying threat intelligence relevant to your security posture.</li>
+        <li><strong>Consent</strong> — where you voluntarily submit identifiers for checking or add them to a watchlist.</li>
+        <li><strong>Contract</strong> — if you use Guardian under an agreement with your employer or service provider.</li>
+      </ul>
+
+      <h3>Third-party processors</h3>
+      <p>Breach lookups may contact external APIs (e.g. Have I Been Pwned, XposedOrNot, HackMyIP) over HTTPS. Only the data required for the lookup is transmitted. Review each provider's privacy policy before enabling live mode. API keys you configure (e.g. HIBP) are read from your local environment — not from Guardian's servers.</p>
+
+      <h3>Your rights</h3>
+      <p>Depending on your location, you may have rights to access, rectify, erase, restrict, or port personal data, and to object to processing. Because data is stored locally, you can delete watchlist entries in the dashboard or remove <code style="font-family:var(--mono);font-size:0.85em">~/.guardian/</code> data files on your machine. Contact the operator (see Contact) to exercise rights where applicable.</p>
+
+      <h3>International transfers</h3>
+      <p>External breach and threat APIs may process data in countries outside your own. Use providers and configurations appropriate for your compliance requirements.</p>
+
+      <h3>California (CCPA/CPRA)</h3>
+      <p>Guardian does not sell personal information. California residents may request disclosure or deletion of personal information held by the operator of this deployment. Local watchlist and cache data can be deleted from your device directly.</p>
+
+      <h3>Retention</h3>
+      <ul>
+        <li>Breach lookup cache: in-memory, typically 10 minutes (configurable).</li>
+        <li>Watchlist: until you remove entries or delete local vault files.</li>
+        <li>Session encryption keys: expire after one hour of inactivity.</li>
+        <li>Threat alerts: in-memory feed, not a permanent archive by default.</li>
+      </ul>
+    </section>
+
+    <section class="legal-section" id="terms">
+      <h2>Terms &amp; conditions</h2>
+      <p>By using Guardian, you agree to these terms. If you do not agree, do not use the service.</p>
+
+      <h3>Service description</h3>
+      <p>Guardian is provided for security awareness and monitoring. Results reflect third-party breach databases and threat feeds at the time of query. We do not guarantee completeness, accuracy, or timeliness of external data.</p>
+
+      <h3>Acceptable use</h3>
+      <ul>
+        <li>Use Guardian only for lawful purposes and on systems you are authorised to monitor.</li>
+        <li>Do not use breach check features to harass, stalk, or enumerate other people's accounts without permission.</li>
+        <li>Do not attempt to bypass encryption, authentication, or rate limits.</li>
+        <li>Do not expose the dashboard to the public internet without hardening (TLS, access controls, firewall rules).</li>
+      </ul>
+
+      <h3>Limitation of liability</h3>
+      <p>Guardian is provided "as is" without warranties of any kind. The operators are not liable for damages arising from reliance on breach results, missed exposures, false positives, or threat feed delays. You remain responsible for your own security decisions.</p>
+
+      <h3>Changes</h3>
+      <p>We may update these terms. Material changes will be reflected in the "Last updated" date above. Continued use after changes constitutes acceptance.</p>
+    </section>
+
+    <section class="legal-section" id="data-protection">
+      <h2>Data protection &amp; encryption</h2>
+      <p>Guardian implements defence-in-depth for sensitive personal checks:</p>
+      <ul>
+        <li><strong>In transit:</strong> X25519 key exchange, HKDF-SHA256 session keys, AES-256-GCM encrypted API payloads between browser and local server. Optional HTTPS/WSS via <code style="font-family:var(--mono);font-size:0.85em">GUARDIAN_TLS_AUTO</code>.</li>
+        <li><strong>At rest:</strong> Watchlist identifiers and breach cache entries sealed with AES-256-GCM. Master key stored at <code style="font-family:var(--mono);font-size:0.85em">~/.guardian/master.key</code> (mode 600).</li>
+        <li><strong>Authentication:</strong> Session tokens required for API access when cryptography is available.</li>
+        <li><strong>Passwords:</strong> Hashed locally; only k-anonymity range queries leave the browser.</li>
+      </ul>
+      <div class="legal-callout"><strong>Important:</strong> Encryption protects data on your machine and over localhost. It does not encrypt data sent to external breach APIs — those providers receive the identifier needed to perform the lookup.</div>
+    </section>
+
+    <section class="legal-section" id="cookies">
+      <h2>Cookies &amp; local storage</h2>
+      <p>Guardian does not use third-party advertising or tracking cookies.</p>
+      <ul>
+        <li><strong>sessionStorage / localStorage:</strong> May store UI preferences (e.g. welcome banner dismissed). No cross-site tracking.</li>
+        <li><strong>Session tokens:</strong> Held in browser memory for encrypted API calls; not shared with external sites.</li>
+        <li><strong>Server-side files:</strong> Encrypted vault files under <code style="font-family:var(--mono);font-size:0.85em">~/.guardian/</code> on your computer.</li>
+      </ul>
+      <p>Under the ePrivacy Directive and similar laws, strictly necessary local storage for security and session management does not require consent in many jurisdictions. Jurisdiction-specific requirements may apply to your deployment.</p>
+    </section>
+
+    <section class="legal-section" id="disclaimer">
+      <h2>Disclaimer</h2>
+      <p>Guardian is not legal advice, not a certified compliance tool, and not a substitute for professional incident response. Breach "clean" results do not guarantee your data has never been exposed. Threat feed severities are heuristic classifications of public intelligence — not official government or vendor severity ratings.</p>
+      <p>Mock/demo mode uses fictional data for testing. Always verify you are in live mode before relying on results for real accounts.</p>
+    </section>
+
+    <section class="legal-section" id="contact">
+      <h2>Contact</h2>
+      <p>For privacy requests, security reports, or questions about these policies, contact the operator of this Guardian deployment:</p>
+      <ul>
+        <li><strong>Email:</strong> privacy@your-organisation.example (replace before production)</li>
+        <li><strong>Security issues:</strong> security@your-organisation.example</li>
+      </ul>
+      <p>EU/UK users may also lodge a complaint with their local data protection supervisory authority.</p>
+    </section>
+  </div>
+</div>
+
+<footer class="site-footer">
+  <span>© Guardian Sec · Local security dashboard</span>
+  <div class="site-footer-links">
+    <button type="button" data-legal="about">About</button>
+    <button type="button" data-legal="privacy">Privacy</button>
+    <button type="button" data-legal="terms">Terms</button>
+    <button type="button" data-legal="data-protection">Security</button>
+    <button type="button" data-legal="contact">Contact</button>
+  </div>
+</footer>
 
 <div id="toast"></div>
 
@@ -2543,9 +2815,33 @@ let breachProviderInfo = null;
 function switchAppTab(tab) {
   document.querySelectorAll('.app-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === `tab-${tab}`));
-  document.body.className = tab === 'live' ? 'tab-live' : 'tab-personal';
+  document.body.className = tab === 'live' ? 'tab-live' : tab === 'legal' ? 'tab-legal' : 'tab-personal';
   if (tab === 'live') loadGlobalFeedStatus();
+  if (tab === 'legal') {
+    const panel = document.getElementById('tab-legal');
+    panel?.scrollTo(0, 0);
+  }
 }
+
+function openLegalSection(id) {
+  switchAppTab('legal');
+  requestAnimationFrame(() => {
+    const el = document.getElementById(id);
+    el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+}
+
+document.querySelectorAll('[data-legal]').forEach(btn => {
+  btn.addEventListener('click', () => openLegalSection(btn.dataset.legal));
+});
+
+document.querySelectorAll('.legal-nav a').forEach(a => {
+  a.addEventListener('click', e => {
+    e.preventDefault();
+    const id = a.getAttribute('href')?.replace('#', '');
+    if (id) openLegalSection(id);
+  });
+});
 
 document.querySelectorAll('.app-tab').forEach(btn => {
   btn.addEventListener('click', () => switchAppTab(btn.dataset.tab));
