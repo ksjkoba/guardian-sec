@@ -3,7 +3,8 @@
 Use this file with `@docs/guardian-handoff.md` in a new Cursor chat to continue work without losing context.
 
 **Project:** Guardian — SLM-powered cybersecurity dashboard  
-**Location (WSL):** `~/guardian`  
+**Location (WSL):** `~/Guardian/Sec`  
+**Windows path:** `\\wsl$\Ubuntu\home\jhak\Guardian\Sec`  
 **Dashboard:** http://127.0.0.1:8765  
 **Serve:** `python3 -m guardian.cli serve`
 
@@ -13,7 +14,7 @@ Use this file with `@docs/guardian-handoff.md` in a new Cursor chat to continue 
 
 - Windows + WSL Ubuntu; often run commands from Git Bash or WSL
 - Corporate SSL proxy: `export GUARDIAN_INSECURE_SSL=1` before serve/fetch
-- Virtualenv: `cd ~/guardian && source .venv/bin/activate`
+- Virtualenv: `cd ~/Guardian/Sec && source .venv/bin/activate`
 - If port busy: `pkill -f 'guardian.cli serve'`
 - After code changes: restart serve + hard-refresh dashboard (`Ctrl+Shift+R`)
 
@@ -117,7 +118,7 @@ Copy `.env.example` → `.env` for persistent config.
 
 ```bash
 pkill -f 'guardian.cli serve'   # if needed
-cd ~/guardian && source .venv/bin/activate
+cd ~/Guardian/Sec && source .venv/bin/activate
 export GUARDIAN_INSECURE_SSL=1
 python3 -m guardian.cli serve
 ```
@@ -160,7 +161,7 @@ python3 -m guardian.cli serve
 ```
 Continue Guardian dashboard work. Read @docs/guardian-handoff.md for full context.
 
-Stack: WSL ~/guardian, serve on :8765, GUARDIAN_INSECURE_SSL=1 often required.
+Stack: WSL ~/Guardian/Sec, serve on :8765, GUARDIAN_INSECURE_SSL=1 often required.
 
 Prior work: live WebSocket feed fix, global threat ticker (12 sources), Personal Check tab
 (mock + XposedOrNot + HIBP auto provider, quota counter), source verification, cross-verify UI.
