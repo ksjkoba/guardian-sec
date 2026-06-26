@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="guardian-ui-version" content="14">
+<meta name="guardian-ui-version" content="17">
 <title>Guardian — Security Dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -41,6 +41,8 @@
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.28);
     --shadow-md: 0 8px 32px rgba(0, 0, 0, 0.32);
     --content-max: 52rem;
+    --personal-shell: min(80rem, calc(100vw - 3rem));
+    --personal-focus: min(52rem, 100%);
     --live-sidebar: 400px;
     --personal-fs: 17px;
   }
@@ -1269,9 +1271,9 @@
   body.tab-personal .header-context.personal-only { display: none; }
   body.tab-personal header { justify-content: flex-start; border-bottom-color: var(--border); }
   #tab-personal .personal-wrap.landing-layout {
-    max-width: 40rem;
+    max-width: var(--personal-shell);
     margin: 0 auto;
-    padding: 3.5rem 1.5rem 4rem;
+    padding: 3.5rem clamp(1.25rem, 5vw, 3rem) 4rem;
     text-align: center;
   }
   .landing-hero h1 {
@@ -1617,6 +1619,16 @@
   .breach-row-date { font-size: 0.75rem; color: var(--text-muted); font-family: var(--mono); white-space: nowrap; }
   .breach-row-meta { font-size: 0.8125rem; color: var(--text-dim); line-height: 1.45; }
   .breach-row-desc { font-size: 0.8125rem; color: var(--text-dim); margin-top: 6px; line-height: 1.45; }
+  .breach-api-note {
+    font-size: 0.8125rem;
+    color: var(--text-dim);
+    line-height: 1.5;
+    margin: 0 0 16px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: rgba(148, 163, 184, 0.08);
+    border: 1px solid rgba(148, 163, 184, 0.15);
+  }
   .result-footnote {
     margin-top: 1rem;
     padding-top: 1rem;
@@ -1790,6 +1802,301 @@
   .settings-btn.secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
   .settings-note { font-size: 0.8125rem; color: var(--text-dim); margin-top: 12px; line-height: 1.45; }
   #settings-status { font-size: 0.875rem; margin-top: 12px; min-height: 1.25em; }
+
+  /* ═══ HOME LAYOUT v9 — personal landing polish ═══ */
+  body.tab-personal {
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  body.tab-personal header {
+    padding: 10px clamp(1rem, 3vw, 1.75rem);
+    flex-wrap: nowrap;
+    gap: 12px;
+    background: var(--bg-elevated);
+  }
+  body.tab-personal .header-brand {
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+  }
+  body.tab-personal .logo {
+    font-size: 1rem;
+    letter-spacing: -0.02em;
+  }
+  body.tab-personal .app-tabs {
+    padding: 0 clamp(1rem, 3vw, 1.75rem) 10px;
+    gap: 4px;
+    background: var(--bg-elevated);
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  body.tab-personal .app-tabs::-webkit-scrollbar { display: none; }
+  body.tab-personal .app-tab {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    padding: 7px 14px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  #tab-personal.tab-panel.active {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg);
+  }
+  #tab-personal .personal-wrap.landing-layout {
+    flex: 1;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    max-width: var(--personal-shell);
+    width: 100%;
+    margin: 0 auto;
+    padding: clamp(1.25rem, 4vh, 2.75rem) clamp(1.25rem, 5vw, 3rem) 1.5rem;
+    text-align: center;
+    -webkit-overflow-scrolling: touch;
+  }
+  #tab-personal .personal-wrap.landing-layout:not(.has-results) > .landing-hero,
+  #tab-personal .personal-wrap.landing-layout:not(.has-results) > .landing-status {
+    width: 100%;
+    max-width: var(--personal-focus);
+    margin-inline: auto;
+  }
+
+  .landing-hero {
+    width: 100%;
+  }
+  .landing-hero .hero-eyebrow {
+    text-align: center;
+    margin-bottom: 8px;
+    font-size: 0.6875rem;
+  }
+  .personal-wrap.has-results .hero-eyebrow { display: none; }
+  .landing-hero h1 {
+    font-size: clamp(1.625rem, 4.5vw, 2.25rem);
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    line-height: 1.2;
+    margin-bottom: 10px;
+  }
+  .landing-hero .hero-lead {
+    font-size: 0.9375rem;
+    line-height: 1.55;
+    margin: 0 auto 1.5rem;
+    max-width: 26rem;
+    color: var(--text-dim);
+  }
+  .hero-search {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    background: var(--surface-elevated);
+    border: 1px solid var(--border-strong);
+    border-radius: 12px;
+    padding: 4px;
+    box-shadow: var(--shadow-md);
+    margin-bottom: 10px;
+    text-align: left;
+  }
+  .hero-input {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    background: transparent;
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 0.9375rem;
+    padding: 12px 14px;
+    border-radius: 8px;
+    outline: none;
+  }
+  .hero-input::placeholder { color: var(--text-muted); }
+  .hero-input:focus {
+    box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.35);
+    border-radius: 8px;
+  }
+  .hero-btn {
+    flex-shrink: 0;
+    border-radius: 8px;
+    padding: 0 22px;
+    font-size: 0.9375rem;
+    min-height: 44px;
+  }
+  .privacy-note {
+    font-size: 0.75rem;
+    line-height: 1.5;
+    margin-bottom: 8px;
+    max-width: 28rem;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .advanced-check {
+    margin-top: 0.75rem;
+    max-width: 100%;
+  }
+  .advanced-check summary {
+    padding: 10px 14px;
+    font-size: 0.8125rem;
+    text-align: center;
+  }
+  .landing-status {
+    margin-top: 1.5rem;
+    margin-bottom: 0.5rem;
+    padding: 0;
+    text-align: center;
+  }
+  .landing-status.hidden { display: none; }
+  .landing-status .trust-strip {
+    margin: 0 auto;
+    max-width: 100%;
+    width: min(22rem, 100%);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    box-shadow: none;
+    background: var(--surface);
+  }
+  .landing-status .trust-strip.is-live .trust-val { color: var(--text); }
+  .landing-status .trust-val {
+    font-size: 1.125rem;
+    font-weight: 600;
+  }
+  .landing-status .trust-label {
+    font-size: 0.625rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .landing-status .trust-stat { padding: 0.875rem 0.5rem; }
+  .landing-status .trust-sources {
+    margin: 10px 0 0;
+  }
+  .landing-hint {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    line-height: 1.45;
+    margin: 10px 0 0;
+    padding: 0 0.25rem;
+  }
+  .landing-hint.hidden { display: none; }
+  .trust-strip {
+    margin: 1.75rem 0 0;
+  }
+  .trust-stat { padding: 1rem 0.75rem; }
+  .trust-val { font-size: 1.25rem; }
+  .trust-label { font-size: 0.6875rem; }
+  .trust-sources { margin: 0.75rem 0 0; }
+
+  .personal-wrap.has-results .landing-hero h1 { font-size: 1.375rem; }
+  .personal-wrap.has-results .landing-hero .hero-lead {
+    font-size: 0.875rem;
+    margin-bottom: 1rem;
+  }
+  .personal-wrap.has-results.landing-layout {
+    justify-content: flex-start;
+    padding-top: 1.25rem;
+    text-align: left;
+  }
+  .personal-wrap.has-results .landing-hero {
+    text-align: center;
+    max-width: var(--personal-focus);
+    margin-inline: auto;
+  }
+  .personal-wrap.has-results .landing-status {
+    max-width: 22rem;
+    margin-inline: auto;
+    text-align: center;
+  }
+  .personal-wrap.has-results .hero-search { margin-bottom: 8px; }
+  .personal-wrap.has-results .trust-strip { margin-top: 0; }
+  .personal-wrap.has-results .results-stage,
+  .personal-wrap.has-results .results-card {
+    width: 100%;
+    max-width: none;
+  }
+  .personal-wrap.has-results .personal-tools {
+    width: 100%;
+    max-width: none;
+  }
+  .personal-wrap.has-results .personal-tools .tools-heading {
+    text-align: left;
+  }
+
+  body.tab-personal .site-footer {
+    padding: 8px clamp(1rem, 3vw, 1.75rem);
+    font-size: 0.6875rem;
+    gap: 8px;
+    background: var(--bg-elevated);
+    max-width: var(--personal-shell);
+    width: 100%;
+    margin-inline: auto;
+  }
+  body.tab-personal .site-footer-links { gap: 4px 10px; }
+  body.tab-personal .site-footer-links button { font-size: 0.6875rem; }
+  body.tab-personal:has(#personal-landing:not(.has-results)) .site-footer-links { display: none; }
+  body.tab-personal:has(#personal-landing:not(.has-results)) .site-footer {
+    justify-content: center;
+    border-top: none;
+    background: transparent;
+    padding-top: 0;
+  }
+
+  .personal-tools {
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+  }
+  .personal-tools .tools-heading {
+    margin-bottom: 1rem;
+    font-size: 0.6875rem;
+  }
+  #tab-personal .password-panel,
+  #tab-personal .watchlist-panel {
+    padding: 1.25rem;
+    margin-bottom: 0;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+  }
+  #tab-personal .password-panel h4,
+  #tab-personal .watchlist-panel h4,
+  #tab-personal .panel-title {
+    font-size: 0.9375rem;
+  }
+  #tab-personal .breach-input { font-size: 0.9375rem; padding: 11px 14px; }
+  #tab-personal .breach-btn { font-size: 0.875rem; padding: 11px 18px; }
+
+  @media (max-width: 480px) {
+    .hero-search {
+      flex-direction: column;
+      padding: 6px;
+      gap: 6px;
+    }
+    .hero-btn { width: 100%; padding: 12px; }
+    body.tab-personal .site-footer {
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }
+  }
+  @media (min-width: 1024px) {
+    .personal-wrap.has-results .exposure-hero {
+      padding: 1.5rem 1.25rem;
+    }
+    .personal-wrap.has-results .result-actions,
+    .personal-wrap.has-results .leaked-tags,
+    .personal-wrap.has-results .result-details {
+      max-width: none;
+    }
+    #tab-personal .personal-secondary {
+      gap: 1.5rem;
+    }
+    #tab-personal .password-panel,
+    #tab-personal .watchlist-panel {
+      padding: 1.5rem;
+    }
+  }
 </style>
 </head>
 <body class="tab-personal">
@@ -1843,13 +2150,14 @@
 <div id="tab-personal" class="tab-panel active">
   <div class="personal-wrap landing-layout" id="personal-landing">
     <section class="landing-hero" id="landing-hero">
+      <p class="hero-eyebrow">Personal breach check</p>
       <h1>Have you been breached?</h1>
-      <p class="hero-lead">Check if your email address appears in a known data breach.</p>
+      <p class="hero-lead">Enter your email to see if it appears in known public data breaches.</p>
       <div class="hero-search">
-        <input class="hero-input" id="breach-input" type="email" placeholder="Email address" autocomplete="email" />
+        <input class="hero-input" id="breach-input" type="email" placeholder="you@example.com" autocomplete="email" />
         <button type="button" class="hero-btn" id="breach-check-btn">Check</button>
       </div>
-      <p class="privacy-note">Identifiers are encrypted in your browser before transmission. Watchlist entries are sealed with AES-256-GCM on this device.</p>
+      <p class="privacy-note">Encrypted in your browser before it leaves this device. Watchlist data stays sealed locally.</p>
       <button type="button" class="sample-link hidden" id="try-sample-btn">Try a sample exposed email</button>
       <details class="advanced-check" id="advanced-check">
         <summary>Phone or username instead</summary>
@@ -1864,18 +2172,20 @@
       </details>
     </section>
 
-    <div class="trust-strip" id="trust-strip">
-      <div class="trust-stat">
-        <span class="trust-val" id="trust-val-1">—</span>
-        <span class="trust-label" id="trust-label-1">breach sources</span>
+    <div class="landing-status hidden" id="landing-status" aria-live="polite">
+      <div class="trust-strip" id="trust-strip">
+        <div class="trust-stat">
+          <span class="trust-val" id="trust-val-1">—</span>
+          <span class="trust-label" id="trust-label-1">sources</span>
+        </div>
+        <div class="trust-stat">
+          <span class="trust-val" id="trust-val-2">—</span>
+          <span class="trust-label" id="trust-label-2">quota</span>
+        </div>
       </div>
-      <div class="trust-stat">
-        <span class="trust-val" id="trust-val-2">—</span>
-        <span class="trust-label" id="trust-label-2">check mode</span>
-      </div>
+      <div class="trust-sources hidden" id="trust-sources"></div>
+      <p class="landing-hint hidden" id="mock-banner"></p>
     </div>
-    <div class="trust-sources hidden" id="trust-sources"></div>
-    <div class="provider-note hidden" id="mock-banner"></div>
     <div class="breach-alert-banner hidden" id="breach-alert-banner"></div>
 
     <section class="results-stage hidden" id="results-stage">
@@ -2031,7 +2341,7 @@
       <p>Guardian is a local security dashboard that combines personal breach monitoring with live threat intelligence. It runs on your machine (default: <code style="font-family:var(--mono);font-size:0.85em">127.0.0.1</code>) and is designed for individuals and organisations in India who want visibility into data breaches and global security feeds while minimising unnecessary sharing of personal data.</p>
       <p>Personal Check queries public breach databases on your behalf. Threat Feed aggregates open-source intelligence (OSINT) from providers such as ThreatFox, URLhaus, and others. Guardian does not sell your digital personal data and does not use it for advertising.</p>
       <div class="legal-callout"><strong>How Guardian compares:</strong> Guardian is not a replacement for Have I Been Pwned or VirusTotal — it is a <em>free, local, unified defense dashboard</em>. Breach checks use parallel free sources (XposedOrNot + HackMyIP). IOC scans combine 100k+ local threat feeds with live abuse.ch APIs (ThreatFox, URLhaus, MalwareBazaar). <strong>File uploads</strong> are scanned locally with ClamAV (when installed) plus hash intelligence — similar to a VirusTotal file check, but without sending your file to the cloud. HIBP is optional only if you explicitly enable it.</div>
-      <div class="legal-callout"><strong>Data Fiduciary (operator):</strong> Guardian Sec Technologies Private Limited, a company incorporated under the Companies Act, 2013, with its registered office at Tower B, 4th Floor, DLF Cyber Park, Udyog Vihar Phase III, Gurugram, Haryana 122016, India.</div>
+      <div class="legal-callout"><strong>Data Fiduciary (operator):</strong> Guardian is built and operated by <strong>Kshitish Jha</strong> as an individual sole operator at <strong>learniam.online</strong> — not a registered company. For this deployment, the operator acts as the Data Fiduciary under the DPDP Act.</div>
     </section>
 
     <section class="legal-section" id="privacy">
@@ -2105,10 +2415,10 @@
       </ul>
 
       <h3>Limitation of liability</h3>
-      <p>Guardian is provided "as is" without warranties of any kind. The operators are not liable for damages arising from reliance on breach results, missed exposures, false positives, or threat feed delays. You remain responsible for your own security decisions.</p>
+      <p>Guardian is provided "as is" without warranties of any kind. The operator is not liable for damages arising from reliance on breach results, missed exposures, false positives, or threat feed delays. You remain responsible for your own security decisions.</p>
 
       <h3>Governing law &amp; jurisdiction</h3>
-      <p>These terms are governed by the laws of <strong>India</strong>. Courts at <strong>Gurugram, Haryana</strong> shall have exclusive jurisdiction, subject to applicable consumer protection laws.</p>
+      <p>These terms are governed by the laws of <strong>India</strong>, subject to applicable consumer protection laws.</p>
 
       <h3>Changes</h3>
       <p>We may update these terms. Material changes will be reflected in the "Last updated" date above. Continued use after changes constitutes acceptance.</p>
@@ -2145,14 +2455,15 @@
 
     <section class="legal-section" id="contact">
       <h2>Contact &amp; grievance redressal</h2>
-      <p>Under Section 13 of the DPDP Act, every Data Fiduciary must publish the contact details of a Grievance Officer or person authorised to respond to Data Principals.</p>
+      <p>Under Section 13 of the DPDP Act, every Data Fiduciary must publish contact details for a Grievance Officer or person authorised to respond to Data Principals. Guardian is operated by <strong>Kshitish Jha</strong> as sole developer and operator; he serves as Grievance Officer for this deployment.</p>
       <ul>
-        <li><strong>Grievance Officer:</strong> Ms. Ananya Kapoor — <a href="mailto:grievance@learniam.online" style="color:var(--primary)">grievance@learniam.online</a></li>
+        <li><strong>Operator &amp; Grievance Officer:</strong> Kshitish Jha — <a href="mailto:grievance@learniam.online" style="color:var(--primary)">grievance@learniam.online</a></li>
         <li><strong>Privacy / DPDP queries:</strong> <a href="mailto:privacy@learniam.online" style="color:var(--primary)">privacy@learniam.online</a></li>
         <li><strong>Security vulnerabilities:</strong> <a href="mailto:security@learniam.online" style="color:var(--primary)">security@learniam.online</a></li>
-        <li><strong>Registered address:</strong> Guardian Sec Technologies Pvt. Ltd., Tower B, 4th Floor, DLF Cyber Park, Udyog Vihar Phase III, Gurugram, Haryana 122016, India</li>
+        <li><strong>General contact:</strong> <a href="mailto:contact@learniam.online" style="color:var(--primary)">contact@learniam.online</a></li>
+        <li><strong>Operator location:</strong> India (sole operator project — contact by email; no corporate registered office)</li>
       </ul>
-      <p>We will endeavour to resolve grievances within timelines prescribed under the DPDP Act and applicable rules. If you are not satisfied with our response, you may approach the <strong>Data Protection Board of India</strong> as provided under the DPDP Act.</p>
+      <p>The operator will endeavour to resolve grievances within timelines prescribed under the DPDP Act and applicable rules. If you are not satisfied with the response, you may approach the <strong>Data Protection Board of India</strong> as provided under the DPDP Act.</p>
     </section>
   </div>
 </div>
@@ -2207,7 +2518,7 @@
 </div>
 
 <footer class="site-footer">
-  <span>© Guardian Sec Technologies Pvt. Ltd. · Gurugram, India</span>
+  <span>© Guardian · Kshitish Jha · learniam.online</span>
   <div class="site-footer-links">
     <button type="button" data-legal="about">About</button>
     <button type="button" data-legal="privacy">Privacy</button>
@@ -3027,7 +3338,7 @@ document.querySelectorAll('.app-tab').forEach(btn => {
 // ── Breach personal check ─────────────────────────────────────────────────────
 const BREACH_PLACEHOLDERS = { email: 'name.surname@gmail.com', phone: '+91 98765 43210', username: 'morgan_kline_88' };
 const BREACH_INPUT_TYPES = { email: 'email', phone: 'tel', username: 'text' };
-const BREACH_HERO_PLACEHOLDERS = { email: 'Email address', phone: 'Phone number', username: 'Username' };
+const BREACH_HERO_PLACEHOLDERS = { email: 'you@example.com', phone: '+91 98765 43210', username: 'username' };
 
 function syncTypeTabs() {
   document.querySelectorAll('.type-tab').forEach(b => {
@@ -3078,14 +3389,14 @@ function renderTrustStrip(data) {
   if (data.live) {
     const sources = data.sources || [];
     v1.textContent = String(data.source_count || sources.length || 1);
-    l1.textContent = sources.length > 1 ? 'sources queried' : 'source connected';
+    l1.textContent = sources.length > 1 ? 'sources' : 'source';
     const q = data.quota;
     if (q && q.tracked && q.remaining != null) {
       v2.textContent = String(q.remaining);
       l2.textContent = 'checks left today';
     } else {
       v2.textContent = 'Live';
-      l2.textContent = (data.label || data.provider || 'database').replace(/_/g, ' ');
+      l2.textContent = (data.label || data.provider || 'connected').replace(/_/g, ' ');
     }
   } else {
     const stats = data.demo_stats || {};
@@ -3157,6 +3468,7 @@ async function loadBreachScenarios() {
     renderBreachBanner(data);
     renderTrustStrip(data);
     applyBreachTypeAvailability(data);
+    document.getElementById('landing-status')?.classList.remove('hidden');
 
     const sampleBtn = document.getElementById('try-sample-btn');
     const sample = (data.scenarios || []).find(s => s.expected === 'exposed' && s.type === 'email')
@@ -3185,22 +3497,23 @@ function formatQuota(q) {
 function renderBreachBanner(data) {
   const banner = document.getElementById('mock-banner');
   if (!banner || !data) return;
-  if (data.live) {
-    const note = data.note ? `${data.note}` : '';
-    const quota = formatQuota(data.quota);
-    const upgrade = data.upgrade_hint ? ` ${data.upgrade_hint}` : '';
-    const hibpReady = data.hibp_configured && !data.hibp_active
-      ? ' HIBP key detected — set GUARDIAN_BREACH_PROVIDER=auto to use it.' : '';
-    const text = [note, quota, upgrade, hibpReady].join('').trim();
-    if (text) {
-      banner.classList.remove('hidden');
-      banner.textContent = `Connected to ${data.label || data.provider}.${text}`;
-    } else {
-      banner.classList.add('hidden');
-    }
+  let text = '';
+  if (!data.live) {
+    text = 'Demo mode — configure a live provider in Settings for real checks.';
   } else {
+    const bits = [];
+    if (data.upgrade_hint) bits.push(data.upgrade_hint);
+    if (data.hibp_configured && !data.hibp_active) {
+      bits.push('HIBP key detected — set provider to auto to enable.');
+    }
+    text = bits.join(' ').trim();
+  }
+  if (text) {
     banner.classList.remove('hidden');
-    banner.textContent = 'Demo mode — sample data only. Set GUARDIAN_BREACH_PROVIDER=xposedornot for live email checks.';
+    banner.textContent = text;
+  } else {
+    banner.classList.add('hidden');
+    banner.textContent = '';
   }
 }
 
@@ -3212,14 +3525,36 @@ function renderBreachFootnote(data) {
   return parts.length ? `<div class="result-footnote">${parts.map(esc).join(' · ')}</div>` : '';
 }
 
+function formatBreachDate(raw) {
+  const d = (raw || '').trim();
+  if (!d || d.toLowerCase() === 'unknown') return 'Date unknown';
+  if (/^\d{4}$/.test(d)) return d;
+  const yearOnly = d.match(/^(\d{4})-01-01$/);
+  if (yearOnly) return yearOnly[1];
+  return d;
+}
+
+function formatBreachMeta(b, provider) {
+  const parts = ['Your email appears in this breach'];
+  if (b.pwn_count > 0) {
+    parts.push(`${Number(b.pwn_count).toLocaleString()} total accounts in breach`);
+  } else {
+    parts.push('Total breach size not reported');
+  }
+  if (b.domain) parts.push(esc(b.domain));
+  if (b.severity) parts.push(`<span class="severity-tag ${esc(b.severity)}">${esc(b.severity)}</span>`);
+  if (provider === 'mock' && b.demo_ip) parts.push(`Demo IP: ${esc(b.demo_ip)} (mock only)`);
+  return parts.join(' · ');
+}
+
 function renderCompactBreaches(breaches, provider) {
   return (breaches || []).map(b => `
     <div class="breach-row">
       <div class="breach-row-head">
         <strong>${esc(b.name)}</strong>
-        <span class="breach-row-date">${esc(b.breach_date || '')}</span>
+        <span class="breach-row-date">${esc(formatBreachDate(b.breach_date))}</span>
       </div>
-      <div class="breach-row-meta">${(b.pwn_count || 0).toLocaleString()} accounts${b.domain ? ` · ${esc(b.domain)}` : ''}${b.severity ? ` · <span class="severity-tag ${esc(b.severity)}">${esc(b.severity)}</span>` : ''}</div>
+      <div class="breach-row-meta">${formatBreachMeta(b, provider)}</div>
       ${b.description ? `<div class="breach-row-desc">${esc(b.description)}</div>` : ''}
       ${(b.data_classes || []).length ? `<div style="margin-top:8px">${(b.data_classes || []).map(d => `<span class="data-tag">${esc(d)}</span>`).join('')}</div>` : ''}
       ${provider === 'mock' && b.demo_location ? `<div class="breach-row-meta" style="margin-top:4px">${esc(b.demo_location)} (demo)</div>` : ''}
@@ -3271,10 +3606,13 @@ function renderBreachResult(data) {
     : '';
   const timelineHtml = (data.timeline || []).map(t => `
     <div class="timeline-item">
-      <span class="timeline-date">${esc(t.date)}</span>
+      <span class="timeline-date">${esc(formatBreachDate(t.date))}</span>
       <span class="timeline-kind">${esc(t.kind)}</span>
       <span>${esc(t.label)}</span>
     </div>`).join('');
+  const apiLimitNote = data.provider !== 'mock'
+    ? `<p class="breach-api-note">Public breach APIs confirm whether your identifier appears in a breach and what data types were exposed. They do not return your IP address, MAC address, or how many accounts share your email within a breach.</p>`
+    : '';
   const breachesHtml = renderCompactBreaches(data.breaches, data.provider);
   const pastesHtml = (data.pastes || []).map(p => `
     <div class="breach-row">
@@ -3301,9 +3639,10 @@ function renderBreachResult(data) {
       </div>
     </div>
     ${recHtml ? `<div class="result-actions"><h4>What to do now</h4><ul class="rec-list">${recHtml}</ul></div>` : ''}
+    ${apiLimitNote}
     ${leakedHtml}
     ${breachesHtml ? `<details class="result-details" open><summary>Breach details (${data.breach_count || 0})</summary><div class="result-details-body">${breachesHtml}</div></details>` : ''}
-    ${timelineHtml ? `<details class="result-details"><summary>Exposure timeline</summary><div class="result-details-body">${timelineHtml}</div></details>` : ''}
+    ${timelineHtml ? `<details class="result-details" open><summary>Exposure timeline</summary><div class="result-details-body">${timelineHtml}</div></details>` : ''}
     ${pastesHtml ? `<details class="result-details"><summary>Public pastes (${data.paste_count || 0})</summary><div class="result-details-body">${pastesHtml}</div></details>` : ''}
     ${linkedHtml ? `<details class="result-details"><summary>Linked accounts (${data.linked_account_count || 0})</summary><div class="result-details-body">${linkedHtml}</div></details>` : ''}
     ${renderBreachFootnote(data)}
