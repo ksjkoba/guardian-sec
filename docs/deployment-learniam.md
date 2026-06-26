@@ -4,10 +4,40 @@
 
 | Host | Purpose |
 |------|---------|
-| `learniam.online` | Marketing / landing (Hostinger website or redirect) |
+| `learniam.online` | Marketing landing (`website/learniam/index.html`) |
 | `guardian.learniam.online` | Guardian dashboard (VPS) |
 
-The dashboard lives on a **subdomain** so the apex stays free for your main site and DNS stays simple.
+The dashboard lives on a **subdomain** so the apex serves the public landing page.
+
+---
+
+## Marketing landing page (`learniam.online`)
+
+Static site source: `website/learniam/index.html`
+
+**Preview locally:**
+
+```bash
+cd ~/Guardian/Sec/website/learniam
+python3 -m http.server 8080
+# open http://127.0.0.1:8080
+```
+
+**Deploy on VPS (same server as Guardian):**
+
+1. Copy project to `/opt/guardian/Sec` (includes `website/learniam/`)
+2. Enable nginx apex config:
+
+```bash
+sudo cp /opt/guardian/Sec/website/learniam/nginx-apex.conf /etc/nginx/sites-available/learniam-apex
+sudo ln -s /etc/nginx/sites-available/learniam-apex /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
+sudo certbot --nginx -d learniam.online -d www.learniam.online
+```
+
+3. Point DNS **A** records `@` and `www` to the same VPS IP as `guardian`.
+
+**Hostinger static hosting (no VPS):** upload `website/learniam/index.html` as your site root in hPanel → **Websites**, and point `guardian` subdomain A record to your Guardian server separately.
 
 ---
 
@@ -147,6 +177,19 @@ Rate limiting: set `GUARDIAN_RATE_LIMIT=120` in `.env` (requests/min per IP, VPS
 
 ---
 
+## Production security
+
+| Control | VPS default |
+|---------|-------------|
+| `GUARDIAN_DISABLE_TEST_ALERT=1` | Blocks `/api/test-alert` (no fake alert injection) |
+| `GUARDIAN_BIND_HOST=127.0.0.1` | Guardian not exposed directly; nginx on 443 only |
+| API session auth | Required for sensitive routes when `cryptography` installed |
+| Verify badges | Persisted to `dashboard.db` after live re-check |
+
+Override test-alert only for debugging: `GUARDIAN_ALLOW_TEST_ALERT=1` (not recommended on public internet).
+
+---
+
 ## Persistence
 
 Alerts and campaigns are stored in `~/.guardian/dashboard.db` and restored when Guardian restarts.
@@ -157,8 +200,11 @@ User settings from the dashboard **Settings** tab are saved to `~/.guardian/sett
 
 ## Email mailboxes (Hostinger)
 
-Create in hPanel → **Emails** for contact addresses used in the Legal tab:
+Create in hPanel → **Emails** (forward all to your inbox if you prefer one inbox):
 
-- `grievance@learniam.online`
-- `privacy@learniam.online`
-- `security@learniam.online`
+| Address | Purpose |
+|---------|---------|
+| `grievance@learniam.online` | DPDP Grievance Officer (Kshitish Jha) |
+| `privacy@learniam.online` | Privacy / DPDP queries |
+| `security@learniam.online` | Vulnerability reports |
+| `contact@learniam.online` | General contact |

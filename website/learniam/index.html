@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Guardian — free personal breach checks and live threat intelligence. Built by Kshitish Jha at learniam.online.">
+  <title>Guardian — Free Security Dashboard | learniam.online</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0b0f14;
+      --surface: #151c26;
+      --border: rgba(148, 163, 184, 0.14);
+      --primary: #3b82f6;
+      --green: #22c55e;
+      --text: #f1f5f9;
+      --dim: #94a3b8;
+      --muted: #64748b;
+      --radius: 12px;
+      --max: 68rem;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      background-image:
+        radial-gradient(ellipse 80% 50% at 50% -10%, rgba(59, 130, 246, 0.12), transparent 55%),
+        radial-gradient(ellipse 50% 40% at 100% 0%, rgba(139, 92, 246, 0.06), transparent 50%);
+      color: var(--text);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .wrap { max-width: var(--max); margin: 0 auto; padding: 0 clamp(1.25rem, 4vw, 2rem); }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1.25rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .logo { font-weight: 600; font-size: 1.125rem; letter-spacing: -0.02em; }
+    .logo span { color: var(--primary); font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; margin-left: 0.35em; }
+    .nav { display: flex; gap: 1.25rem; font-size: 0.875rem; }
+    .nav a { color: var(--dim); }
+    .nav a:hover { color: var(--text); text-decoration: none; }
+    .hero {
+      text-align: center;
+      padding: clamp(3rem, 8vh, 5rem) 0 clamp(2.5rem, 6vh, 4rem);
+    }
+    .eyebrow {
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--primary);
+      margin-bottom: 1rem;
+    }
+    h1 {
+      font-size: clamp(2rem, 5vw, 3rem);
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 1.15;
+      margin-bottom: 1rem;
+      max-width: 18ch;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .lead {
+      font-size: clamp(1rem, 2.5vw, 1.125rem);
+      color: var(--dim);
+      max-width: 40rem;
+      margin: 0 auto 2rem;
+    }
+    .cta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      justify-content: center;
+      margin-bottom: 1rem;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.875rem 1.75rem;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 0.9375rem;
+      border: none;
+      cursor: pointer;
+      font-family: inherit;
+      transition: filter 0.15s;
+    }
+    .btn:hover { filter: brightness(1.08); text-decoration: none; }
+    .btn-primary {
+      background: linear-gradient(180deg, #4f8ef7 0%, #2563eb 100%);
+      color: #fff;
+      box-shadow: 0 4px 24px rgba(59, 130, 246, 0.35);
+    }
+    .btn-ghost {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .note { font-size: 0.8125rem; color: var(--muted); }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 1rem;
+      padding-bottom: 3rem;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+    }
+    .card h3 { font-size: 1rem; margin-bottom: 0.5rem; }
+    .card p { font-size: 0.875rem; color: var(--dim); }
+    .card .tag {
+      display: inline-block;
+      font-size: 0.625rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--green);
+      margin-bottom: 0.75rem;
+    }
+    .section-title {
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      text-align: center;
+      margin-bottom: 1.25rem;
+    }
+    .operator {
+      text-align: center;
+      padding: 2.5rem 0;
+      border-top: 1px solid var(--border);
+      font-size: 0.875rem;
+      color: var(--dim);
+    }
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 1.25rem 0 2rem;
+      font-size: 0.75rem;
+      color: var(--muted);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem 1.5rem;
+      justify-content: space-between;
+      align-items: center;
+    }
+    footer .links { display: flex; flex-wrap: wrap; gap: 0.75rem 1rem; }
+    footer a { color: var(--dim); }
+    @media (max-width: 600px) {
+      .nav { display: none; }
+      .cta-row { flex-direction: column; align-items: stretch; }
+      .btn { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="logo">Guardian<span>Sec</span></div>
+      <nav class="nav" aria-label="Primary">
+        <a href="#features">Features</a>
+        <a href="#free">Free stack</a>
+        <a href="https://guardian.learniam.online/">Dashboard</a>
+      </nav>
+    </header>
+
+    <section class="hero">
+      <p class="eyebrow">learniam.online</p>
+      <h1>Your free security command centre</h1>
+      <p class="lead">
+        Check if you've been breached, monitor live threat feeds, scan files locally, and track attack patterns —
+        one dashboard, built to stay free.
+      </p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="https://guardian.learniam.online/">Open Guardian Dashboard</a>
+        <a class="btn btn-ghost" href="https://guardian.learniam.online/#tab-legal">Privacy &amp; Legal</a>
+      </div>
+      <p class="note">Encrypted breach checks · 12+ live threat sources · No HIBP required</p>
+    </section>
+
+    <p class="section-title" id="features">What you get</p>
+    <div class="grid">
+      <article class="card">
+        <span class="tag">Personal</span>
+        <h3>Breach check</h3>
+        <p>Email and username lookups via free sources (XposedOrNot + HackMyIP). Password checks use k-anonymity — your full password never leaves your browser.</p>
+      </article>
+      <article class="card">
+        <span class="tag">Live intel</span>
+        <h3>Threat feed</h3>
+        <p>ThreatFox, URLhaus, MalwareBazaar, CISA KEV, and more — polled automatically with campaign detection when related alerts cluster.</p>
+      </article>
+      <article class="card">
+        <span class="tag">Local</span>
+        <h3>File &amp; IOC scan</h3>
+        <p>Upload files for ClamAV scanning plus hash intelligence. Paste IPs, URLs, or hashes for unified abuse.ch and local feed lookups.</p>
+      </article>
+      <article class="card">
+        <span class="tag">Private</span>
+        <h3>E2E encryption</h3>
+        <p>Sensitive checks are encrypted in your browser. Watchlist data is sealed with AES-256-GCM on your device.</p>
+      </article>
+    </div>
+
+    <p class="section-title" id="free">Built to complement, not bill</p>
+    <div class="grid" style="padding-bottom:2rem">
+      <article class="card">
+        <h3>Not a HIBP replacement</h3>
+        <p>Guardian aggregates free breach APIs in parallel. HIBP is optional only if you add your own API key.</p>
+      </article>
+      <article class="card">
+        <h3>Not a VirusTotal replacement</h3>
+        <p>Local ClamAV + hash intel gives you file checks without uploading to the cloud.</p>
+      </article>
+      <article class="card">
+        <h3>India-ready legal</h3>
+        <p>DPDP Act privacy notice, grievance contact, and encryption details are built into the dashboard.</p>
+      </article>
+    </div>
+
+    <div class="operator">
+      <p>Built and operated by <strong>Kshitish Jha</strong> · Individual sole operator at learniam.online</p>
+      <p style="margin-top:0.5rem">
+        <a href="mailto:contact@learniam.online">contact@learniam.online</a>
+        · <a href="mailto:grievance@learniam.online">grievance@learniam.online</a>
+      </p>
+    </div>
+
+    <footer>
+      <span>© Guardian · Kshitish Jha · learniam.online</span>
+      <div class="links">
+        <a href="https://guardian.learniam.online/">Dashboard</a>
+        <a href="mailto:privacy@learniam.online">Privacy</a>
+        <a href="mailto:security@learniam.online">Security</a>
+        <a href="mailto:grievance@learniam.online">Grievance</a>
+      </div>
+    </footer>
+  </div>
+</body>
+</html>
