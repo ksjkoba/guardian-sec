@@ -10,6 +10,7 @@ class _Env:
     KEYS = (
         "GUARDIAN_BREACH_PROVIDER",
         "GUARDIAN_BREACH_LIVE",
+        "GUARDIAN_BREACH_FAST",
         "GUARDIAN_ALLOW_HIBP",
         "HIBP_API_KEY",
         "GUARDIAN_XON_DAILY_LIMIT",
@@ -205,11 +206,52 @@ def test_xon_clean_response():
         assert r.status == "clean"
 
 
+def test_merge_prefers_richer_breach():
+    sparse = bl.BreachIncident(
+        name="LinkedIn",
+        breach_date="unknown",
+        added_date="unknown",
+        data_classes=[],
+        description="Listed in HackMyIP breach index as LinkedIn.",
+        source_provider="HackMyIP",
+    )
+    rich = bl.BreachIncident(
+        name="linkedin",
+        breach_date="2012-05-05",
+        added_date="2012-05-05",
+        data_classes=["Email addresses", "Passwords"],
+        description="LinkedIn breach with full detail.",
+        pwn_count=164_611_595,
+        domain="linkedin.com",
+        source_provider="XposedOrNot",
+    )
+    merged = bl._merge_breach_lists([[sparse], [rich]])
+    assert len(merged) == 1
+    assert merged[0].pwn_count == 164_611_595
+    assert merged[0].data_classes
+
+
 def test_xon_exposed_response():
     with _Env(GUARDIAN_BREACH_PROVIDER="xposedornot"):
         def fake_http(url, headers=None):
             if "check-email" in url:
                 return 200, {"breaches": [["LinkedIn"]]}
+            if "breach-analytics" in url:
+                return 200, {
+                    "ExposedBreaches": {
+                        "breaches_details": [
+                            {
+                                "breach": "LinkedIn",
+                                "xposed_date": "2012",
+                                "xposed_records": 164611595,
+                                "xposed_data": "Email addresses;Passwords",
+                                "details": "LinkedIn breach affecting millions of accounts.",
+                                "domain": "linkedin.com",
+                                "verified": "Yes",
+                            }
+                        ]
+                    }
+                }
             return 404, {"Error": "Not found"}
 
         with patch.object(bl, "_http_get_json", side_effect=fake_http):
@@ -217,6 +259,27 @@ def test_xon_exposed_response():
         assert r.status == "exposed"
         assert r.breach_count == 1
         assert r.breaches[0].name == "LinkedIn"
+        assert r.breaches[0].pwn_count == 164611595
+        assert "Email addresses" in r.breaches[0].data_classes
+        assert r.timeline
+        assert r.timeline[0]["date"] == "2012"
+
+
+def test_xon_fast_skips_analytics_enrichment():
+    with _Env(GUARDIAN_BREACH_PROVIDER="xposedornot", GUARDIAN_BREACH_FAST="1"):
+        calls: list[str] = []
+
+        def fake_http(url, headers=None):
+            calls.append(url)
+            if "check-email" in url:
+                return 200, {"breaches": [["Wattpad"]]}
+            raise AssertionError("analytics should not be called in fast mode")
+
+        with patch.object(bl, "_http_get_json", side_effect=fake_http):
+            r = bl.check_breach("email", "test@example.com")
+        assert r.status == "exposed"
+        assert r.breaches[0].breach_date == "unknown"
+        assert len(calls) == 1
 
 
 def test_xon_phone_not_supported():

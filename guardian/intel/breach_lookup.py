@@ -9,6 +9,11 @@ Providers (GUARDIAN_BREACH_PROVIDER):
   hibp          — Have I Been Pwned (requires HIBP_API_KEY)
 
 Set GUARDIAN_BREACH_LIVE=1 as shorthand for auto when no provider is set.
+
+Enrichment (XposedOrNot):
+  GUARDIAN_BREACH_FAST=1   — check-email only (sparse dates/classes on hits)
+  GUARDIAN_BREACH_RICH=1   — always use breach-analytics (slowest, most detail)
+  default                  — check-email first, then analytics when exposed
 """
 
 from __future__ import annotations
@@ -357,14 +362,43 @@ def validate_identifier(identifier_type: IdentifierType, value: str) -> str | No
     return None
 
 
+def _timeline_sort_key(date: str) -> tuple[int, str]:
+    d = (date or "").strip().lower()
+    if not d or d == "unknown":
+        return (0, "")
+    return (1, d)
+
+
+def _format_timeline_date(date: str) -> str:
+    d = (date or "").strip()
+    if not d or d.lower() == "unknown":
+        return "Date unknown"
+    if re.fullmatch(r"\d{4}", d):
+        return d
+    m = re.fullmatch(r"(\d{4})-01-01", d)
+    if m:
+        return m.group(1)
+    return d
+
+
 def _build_timeline(breaches: list[BreachIncident], pastes: list[PasteExposure]) -> list[dict[str, str]]:
-    events: list[tuple[str, str, str]] = []
+    events: list[tuple[str, str, str, str]] = []
     for b in breaches:
-        events.append((b.breach_date, "breach", f"{b.name} — {', '.join(b.data_classes[:4])}"))
+        classes = b.data_classes[:4]
+        if classes:
+            detail = ", ".join(classes)
+            if len(b.data_classes) > 4:
+                detail += f" (+{len(b.data_classes) - 4} more)"
+            label = f"{b.name} — {detail}"
+        else:
+            label = b.name
+        events.append((b.breach_date, "breach", label, _format_timeline_date(b.breach_date)))
     for p in pastes:
-        events.append((p.exposed_date, "paste", f"{p.source}: {p.title}"))
-    events.sort(key=lambda x: x[0], reverse=True)
-    return [{"date": d, "kind": k, "label": lbl} for d, k, lbl in events]
+        events.append(
+            (p.exposed_date, "paste", f"{p.source}: {p.title}", _format_timeline_date(p.exposed_date))
+        )
+    events.sort(key=lambda x: _timeline_sort_key(x[0]), reverse=True)
+    return [{"date": disp, "kind": k, "label": lbl} for _, k, lbl, disp in events]
 
 
 def _recommendations(status: CheckStatus, breaches: list[BreachIncident], *, live: bool = False) -> list[str]:
@@ -1045,17 +1079,35 @@ def _normalize_breach_name(name: str) -> str:
     return re.sub(r"[^a-z0-9]", "", name.lower())
 
 
+def _breach_detail_score(breach: BreachIncident) -> int:
+    score = 0
+    if breach.breach_date and breach.breach_date != "unknown":
+        score += 4
+    if breach.data_classes:
+        score += 2 + min(len(breach.data_classes), 5)
+    if breach.pwn_count > 0:
+        score += 2
+    if breach.domain:
+        score += 1
+    if breach.description and not breach.description.startswith("Listed in"):
+        score += 1
+    return score
+
+
 def _merge_breach_lists(lists: list[list[BreachIncident]]) -> list[BreachIncident]:
-    seen: set[str] = set()
-    merged: list[BreachIncident] = []
+    best: dict[str, BreachIncident] = {}
+    order: list[str] = []
     for blist in lists:
         for breach in blist:
             key = _normalize_breach_name(breach.name)
-            if not key or key in seen:
+            if not key:
                 continue
-            seen.add(key)
-            merged.append(breach)
-    return merged
+            if key not in best:
+                best[key] = breach
+                order.append(key)
+            elif _breach_detail_score(breach) > _breach_detail_score(best[key]):
+                best[key] = breach
+    return [best[k] for k in order]
 
 
 def _xon_names_from_check_email(data: dict[str, Any]) -> list[str]:
@@ -1139,8 +1191,22 @@ def _query_xon_analytics(email: str) -> dict[str, Any]:
     return {"ok": True, "breaches": breaches, "pastes": pastes, "exposed": has_signal, "error": None}
 
 
+def _xon_stubs_from_names(names: list[str]) -> list[BreachIncident]:
+    return [
+        BreachIncident(
+            name=name,
+            breach_date="unknown",
+            added_date="unknown",
+            data_classes=[],
+            description=f"Listed in XposedOrNot breach index as {name}.",
+            source_provider="XposedOrNot",
+        )
+        for name in names
+    ]
+
+
 def _query_xon_raw(email: str) -> dict[str, Any]:
-    """Query XposedOrNot — fast check-email first (one HTTP call for most lookups)."""
+    """Query XposedOrNot — fast check-email; enrich with analytics on positive hits."""
     if os.environ.get("GUARDIAN_BREACH_RICH", "").lower() in ("1", "true", "yes"):
         return _query_xon_analytics(email)
 
@@ -1163,18 +1229,25 @@ def _query_xon_raw(email: str) -> dict[str, Any]:
             return {"ok": False, "error": f"HTTP {status}", "breaches": [], "pastes": [], "exposed": False}
         return {"ok": True, "breaches": [], "pastes": [], "exposed": False, "error": None}
 
-    breaches = [
-        BreachIncident(
-            name=name,
-            breach_date="unknown",
-            added_date="unknown",
-            data_classes=[],
-            description=f"Listed in XposedOrNot breach index as {name}.",
-            source_provider="XposedOrNot",
-        )
-        for name in names
-    ]
-    return {"ok": True, "breaches": breaches, "pastes": [], "exposed": True, "error": None}
+    fast_only = os.environ.get("GUARDIAN_BREACH_FAST", "").lower() in ("1", "true", "yes")
+    if not fast_only:
+        enriched = _query_xon_analytics(key)
+        if enriched.get("ok") and enriched.get("breaches"):
+            return {
+                "ok": True,
+                "breaches": enriched["breaches"],
+                "pastes": enriched.get("pastes") or [],
+                "exposed": True,
+                "error": None,
+            }
+
+    return {
+        "ok": True,
+        "breaches": _xon_stubs_from_names(names),
+        "pastes": [],
+        "exposed": True,
+        "error": None,
+    }
 
 
 def _query_xon_username_raw(username: str) -> dict[str, Any]:
@@ -2077,12 +2150,15 @@ def watchlist_add(identifier_type: IdentifierType, value: str, label: str = "") 
 
 def watchlist_remove(entry_id: str) -> dict[str, Any]:
     _watchlist_load_once()
+    removed = False
     with _watchlist_lock:
         if entry_id in _watchlist:
             del _watchlist[entry_id]
             _watchlist_values.pop(entry_id, None)
-            _watchlist_persist()
-            return {"ok": True}
+            removed = True
+    if removed:
+        _watchlist_persist()
+        return {"ok": True}
     return {"error": "not found"}
 
 
