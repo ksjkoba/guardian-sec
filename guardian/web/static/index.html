@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="guardian-ui-version" content="20">
+<meta name="guardian-ui-version" content="21">
 <title>Guardian — Security Dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -889,6 +889,12 @@
     font-size: 10px;
     margin: 2px 4px 2px 0;
   }
+  .data-tag.clickable { cursor: pointer; transition: background .12s ease, border-color .12s ease, opacity .12s ease, transform .06s ease; }
+  .data-tag.clickable:hover { background: rgba(159,122,234,0.28); border-color: rgba(159,122,234,0.6); }
+  .data-tag.clickable:active { transform: translateY(1px); }
+  .data-tag.active { background: #9f7aea; border-color: #9f7aea; color: #fff; font-weight: 600; }
+  .breach-row.dimmed { opacity: 0.32; }
+  .breach-filter-clear { display: inline-block; margin-left: 8px; font-size: 11px; color: var(--text-muted); cursor: pointer; text-decoration: underline; }
   .rec-list { margin: 0; padding-left: 20px; color: var(--text-dim); font-size: 0.9375rem; line-height: 1.65; }
   .breach-hero-clean {
     text-align: center;
@@ -3568,9 +3574,14 @@ function formatBreachMeta(b, provider) {
   return parts.join(' · ');
 }
 
+function dataClassKey(d) { return (d || '').toLowerCase().trim(); }
+
 function renderCompactBreaches(breaches, provider) {
-  return (breaches || []).map(b => `
-    <div class="breach-row">
+  return (breaches || []).map(b => {
+    const classes = b.data_classes || [];
+    const keys = classes.map(dataClassKey).join('|');
+    return `
+    <div class="breach-row" data-classes="${esc(keys)}">
       <div class="breach-row-head">
         <strong>${esc(b.name)}</strong>
         <span class="breach-row-date">${esc(formatBreachDate(b.breach_date, b.breach_date_precision))}</span>
@@ -3578,14 +3589,46 @@ function renderCompactBreaches(breaches, provider) {
       <div class="breach-row-meta">${formatBreachMeta(b, provider)}</div>
       ${formatIndexedDate(b.added_date) ? `<div class="breach-row-meta" style="margin-top:4px">${esc(formatIndexedDate(b.added_date))}</div>` : ''}
       ${b.description ? `<div class="breach-row-desc">${esc(b.description)}</div>` : ''}
-      ${(b.data_classes || []).length ? `<div style="margin-top:8px">${(b.data_classes || []).map(d => `<span class="data-tag">${esc(d)}</span>`).join('')}</div>` : ''}
+      ${classes.length ? `<div style="margin-top:8px">${classes.map(d => `<span class="data-tag clickable" data-class="${esc(dataClassKey(d))}" role="button" tabindex="0" title="Filter breaches that leaked ${esc(d)}">${esc(d)}</span>`).join('')}</div>` : ''}
       ${formatNetworkExposure(b.data_classes)}
       ${provider === 'mock' && b.demo_location ? `<div class="breach-row-meta" style="margin-top:4px">${esc(b.demo_location)} (demo)</div>` : ''}
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
+
+let activeDataFilter = null;
+function applyDataClassFilter(key) {
+  const root = document.getElementById('breach-result');
+  if (!root) return;
+  if (activeDataFilter === key) { key = null; }
+  activeDataFilter = key;
+  const rows = root.querySelectorAll('.breach-row[data-classes]');
+  rows.forEach(row => {
+    const has = !key || (row.getAttribute('data-classes') || '').split('|').includes(key);
+    row.classList.toggle('dimmed', !!key && !has);
+  });
+  root.querySelectorAll('.data-tag.clickable').forEach(t => {
+    t.classList.toggle('active', !!key && t.getAttribute('data-class') === key);
+  });
+  const clear = document.getElementById('breach-filter-clear');
+  if (clear) clear.style.display = key ? 'inline-block' : 'none';
+}
+
+document.addEventListener('click', (e) => {
+  const tag = e.target.closest('.data-tag.clickable');
+  if (tag) { applyDataClassFilter(tag.getAttribute('data-class')); return; }
+  if (e.target.id === 'breach-filter-clear') { applyDataClassFilter(activeDataFilter); }
+});
+document.addEventListener('keydown', (e) => {
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.classList && e.target.classList.contains('data-tag') && e.target.classList.contains('clickable')) {
+    e.preventDefault();
+    applyDataClassFilter(e.target.getAttribute('data-class'));
+  }
+});
 
 function renderBreachResult(data) {
   lastBreachResult = data;
+  activeDataFilter = null;
   const el = document.getElementById('breach-result');
   if (!data) { el.innerHTML = ''; return; }
   showResultsUI();
@@ -3625,7 +3668,7 @@ function renderBreachResult(data) {
   const breachLabel = data.breach_count === 1 ? 'breach' : 'breaches';
   const recHtml = (data.recommendations || []).map(r => `<li>${esc(r)}</li>`).join('');
   const leakedHtml = (data.data_classes_summary || []).length
-    ? `<div class="leaked-tags"><h4>What leaked</h4><div>${data.data_classes_summary.map(d => `<span class="data-tag">${esc(d)}</span>`).join('')}</div></div>`
+    ? `<div class="leaked-tags"><h4>What leaked <span id="breach-filter-clear" class="breach-filter-clear" style="display:none">clear filter</span></h4><div>${data.data_classes_summary.map(d => `<span class="data-tag clickable" data-class="${esc(dataClassKey(d))}" role="button" tabindex="0" title="Filter breaches that leaked ${esc(d)}">${esc(d)}</span>`).join('')}</div></div>`
     : '';
   const timelineHtml = (data.timeline || []).map(t => `
     <div class="timeline-item">

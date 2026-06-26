@@ -22,6 +22,7 @@ def _reset_guardian_state() -> None:
     bl._xon_catalog_cache.clear()
     bl._xon_catalog_index = None
     bl._xon_catalog_index_loaded_at = 0.0
+    bl._xon_catalog_index_failed_at = 0.0
 
     keys._master_key = None
     persist._initialized = False

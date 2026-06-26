@@ -1060,13 +1060,68 @@ def _breach_cache_set(
             _breach_cache.pop(oldest, None)
 
 
+_DATA_CLASS_ALIASES = {
+    "email": "Email addresses",
+    "email address": "Email addresses",
+    "email addresses": "Email addresses",
+    "emails": "Email addresses",
+    "name": "Names",
+    "names": "Names",
+    "full name": "Names",
+    "full names": "Names",
+    "username": "Usernames",
+    "usernames": "Usernames",
+    "password": "Passwords",
+    "passwords": "Passwords",
+    "password hint": "Password hints",
+    "password hints": "Password hints",
+    "phone": "Phone numbers",
+    "phone number": "Phone numbers",
+    "phone numbers": "Phone numbers",
+    "mobile": "Phone numbers",
+    "address": "Physical addresses",
+    "addresses": "Physical addresses",
+    "physical address": "Physical addresses",
+    "physical addresses": "Physical addresses",
+    "geographic location": "Geographic locations",
+    "geographic locations": "Geographic locations",
+    "location": "Geographic locations",
+    "locations": "Geographic locations",
+    "ip": "IP addresses",
+    "ip address": "IP addresses",
+    "ip addresses": "IP addresses",
+    "dob": "Dates of birth",
+    "date of birth": "Dates of birth",
+    "dates of birth": "Dates of birth",
+    "gender": "Genders",
+    "genders": "Genders",
+    "spoken language": "Spoken languages",
+    "spoken languages": "Spoken languages",
+}
+
+
+def _normalize_data_class(label: str) -> str:
+    text = " ".join(str(label).split()).strip()
+    if not text:
+        return ""
+    return _DATA_CLASS_ALIASES.get(text.lower(), text)
+
+
 def _parse_xon_data_classes(raw: str | list[Any]) -> list[str]:
     if isinstance(raw, list):
-        return [str(p).strip() for p in raw if str(p).strip()]
-    if not raw:
+        items = [str(p).strip() for p in raw]
+    elif not raw:
         return []
-    parts = re.split(r"[;,]", str(raw))
-    return [p.strip() for p in parts if p.strip()]
+    else:
+        items = [p.strip() for p in re.split(r"[;,]", str(raw))]
+    seen: set[str] = set()
+    out: list[str] = []
+    for it in items:
+        norm = _normalize_data_class(it)
+        if norm and norm.lower() not in seen:
+            seen.add(norm.lower())
+            out.append(norm)
+    return out
 
 
 def _parse_breach_date(raw: Any) -> tuple[str, str]:
