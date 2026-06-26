@@ -16,16 +16,17 @@ from guardian.web.server import create_app, DashboardState
 # ─── Fixtures ────────────────────────────────────────────────────────────────
 
 @pytest.fixture
-def ds():
-    return DashboardState()
-
-
-@pytest.fixture
-def client(ds, monkeypatch):
+def client(monkeypatch, tmp_path):
     monkeypatch.setenv("GUARDIAN_API_AUTH", "0")
     monkeypatch.setenv("GUARDIAN_ALLOW_PLAINTEXT", "1")
+    monkeypatch.setenv("GUARDIAN_DATA_DIR", str(tmp_path / "guardian"))
+    import guardian.web.persistence as persist
+
+    persist._initialized = False
+    ds = DashboardState()
     app = create_app(dashboard_state=ds)
-    return TestClient(app), ds
+    with TestClient(app) as tc:
+        yield tc, ds
 
 
 def _make_alert(
