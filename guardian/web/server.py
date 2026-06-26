@@ -256,14 +256,14 @@ def create_app(dashboard_state: "DashboardState | None" = None) -> "FastAPI":
 
     @app.middleware("http")
     async def guardian_security_layer(request: "Request", call_next):  # type: ignore[no-untyped-def]
-        from guardian.security.auth import PUBLIC_API_PATHS, api_auth_enabled, verify_request_token
+        from guardian.security.auth import api_auth_enabled, public_api_paths, verify_request_token
         from guardian.web.ratelimit import allow_request
 
         path = request.url.path
         client = request.client.host if request.client else "unknown"
         if not allow_request(client):
             return JSONResponse({"error": "rate limit exceeded"}, status_code=429)
-        if api_auth_enabled() and path.startswith("/api/") and path not in PUBLIC_API_PATHS:
+        if api_auth_enabled() and path.startswith("/api/") and path not in public_api_paths(client):
             token = request.headers.get("X-Guardian-Session", "")
             if sessions is None or not verify_request_token(sessions, token):
                 return JSONResponse(
@@ -384,9 +384,17 @@ def create_app(dashboard_state: "DashboardState | None" = None) -> "FastAPI":
             return JSONResponse({"error": str(e)}, status_code=400)
 
     @app.post("/api/test-alert")
-    async def inject_test_alert(body: dict | None = None) -> "JSONResponse":
+    async def inject_test_alert(request: "Request", body: dict | None = None) -> "JSONResponse":
         """Inject a test alert into the live dashboard (localhost dev helper)."""
         from guardian.engine.alert import Alert, Severity
+        from guardian.security.auth import test_alert_allowed
+
+        client = request.client.host if request.client else ""
+        if not test_alert_allowed(client):
+            return JSONResponse(
+                {"error": "test-alert disabled in production (VPS). Use GUARDIAN_ALLOW_TEST_ALERT=1 to override."},
+                status_code=403,
+            )
 
         payload = body or {}
         sev_name = str(payload.get("severity", "HIGH")).upper()
@@ -578,6 +586,7 @@ def create_app(dashboard_state: "DashboardState | None" = None) -> "FastAPI":
         result["source_label"] = source_label(source)
 
         if alert_id:
+            updated: dict | None = None
             with ds._lock:
                 for a in ds._alerts:
                     if a.get("id") == alert_id:
@@ -593,7 +602,14 @@ def create_app(dashboard_state: "DashboardState | None" = None) -> "FastAPI":
                                 "verified_at": a["verified_at"],
                                 "verified_detail": a["verified_detail"],
                             })
+                        updated = dict(a)
                         break
+            if updated:
+                try:
+                    from guardian.web.persistence import save_alert
+                    save_alert(updated)
+                except Exception:
+                    pass
 
         return JSONResponse(result)
 

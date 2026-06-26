@@ -9,13 +9,41 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from guardian.security.session import SessionManager
 
-# Paths reachable without a session token (localhost bootstrap + handshake)
-PUBLIC_API_PATHS = frozenset({
+# Paths reachable without a session token (bootstrap + handshake)
+_PUBLIC_BASE = frozenset({
     "/api/stats",
     "/api/security/status",
     "/api/security/handshake",
-    "/api/test-alert",  # localhost dev helper (cli test-alert)
 })
+
+# Back-compat alias (local dev); prefer public_api_paths(client_host) in middleware.
+PUBLIC_API_PATHS = _PUBLIC_BASE | {"/api/test-alert"}
+
+
+def test_alert_allowed(client_host: str | None = None) -> bool:
+    """Test-alert injection is local-dev only unless explicitly enabled."""
+    if os.environ.get("GUARDIAN_DISABLE_TEST_ALERT", "").lower() in ("1", "true", "yes"):
+        return False
+    if os.environ.get("GUARDIAN_ALLOW_TEST_ALERT", "").lower() in ("1", "true", "yes"):
+        return True
+    try:
+        from guardian.web.deploy import deploy_mode
+
+        if deploy_mode() == "vps":
+            return False
+    except ImportError:
+        pass
+    host = (client_host or "").strip().lower()
+    if host and host not in ("127.0.0.1", "::1", "localhost"):
+        return False
+    return True
+
+
+def public_api_paths(client_host: str | None = None) -> frozenset[str]:
+    paths = set(_PUBLIC_BASE)
+    if test_alert_allowed(client_host):
+        paths.add("/api/test-alert")
+    return frozenset(paths)
 
 
 def api_auth_enabled() -> bool:
