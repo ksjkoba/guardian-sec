@@ -11,6 +11,7 @@ class _Env:
         "GUARDIAN_BREACH_PROVIDER",
         "GUARDIAN_BREACH_LIVE",
         "GUARDIAN_BREACH_FAST",
+        "GUARDIAN_BREACH_NO_CATALOG",
         "GUARDIAN_ALLOW_HIBP",
         "HIBP_API_KEY",
         "GUARDIAN_XON_DAILY_LIMIT",
@@ -231,8 +232,110 @@ def test_merge_prefers_richer_breach():
     assert merged[0].data_classes
 
 
-def test_xon_exposed_response():
+def test_parse_breach_date_iso_and_year():
+    assert bl._parse_breach_date("2020") == ("2020-01-01", "year")
+    assert bl._parse_breach_date("2020-06-01T00:00:00+00:00") == ("2020-06-01", "day")
+    assert bl._parse_breach_date("unknown") == ("unknown", "unknown")
+
+
+def test_xon_catalog_enriches_exact_date():
     with _Env(GUARDIAN_BREACH_PROVIDER="xposedornot"):
+        bl._xon_catalog_cache.clear()
+        incident = bl.BreachIncident(
+            name="Wattpad",
+            breach_date="2020-01-01",
+            added_date="unknown",
+            data_classes=[],
+            description="stub",
+            breach_date_precision="year",
+            source_provider="XposedOrNot",
+        )
+
+        bl._xon_catalog_cache.clear()
+        bl._xon_catalog_index = None
+        bl._xon_catalog_index_loaded_at = 0.0
+
+        def fake_http(url, headers=None):
+            if url.rstrip("/").endswith("/v1/breaches"):
+                return 200, {
+                    "exposedBreaches": [
+                        {
+                            "breachID": "Wattpad",
+                            "breachedDate": "2020-06-01T00:00:00+00:00",
+                            "addedDate": "2023-11-08T06:30:32+00:00",
+                            "exposedData": ["Email addresses", "IP addresses"],
+                            "exposedRecords": 268113400,
+                            "exposureDescription": "Wattpad breach",
+                            "domain": "wattpad.com",
+                            "verified": True,
+                        }
+                    ]
+                }
+            return 404, {}
+
+        with patch.object(bl, "_http_get_json", side_effect=fake_http):
+            enriched = bl._xon_enrich_breach(incident)
+        assert enriched.breach_date == "2020-06-01"
+        assert enriched.breach_date_precision == "day"
+        assert enriched.added_date == "2023-11-08"
+        assert any("IP addresses" in c for c in enriched.data_classes)
+
+
+def test_xon_stubs_enriched_via_catalog_when_analytics_empty():
+    with _Env(GUARDIAN_BREACH_PROVIDER="xposedornot"):
+        bl._xon_catalog_cache.clear()
+        bl._xon_catalog_index = None
+        bl._xon_catalog_index_loaded_at = 0.0
+
+        def fake_http(url, headers=None):
+            if "check-email" in url:
+                return 200, {"breaches": [["Wattpad", "Dunzo"]]}
+            if "breach-analytics" in url:
+                return 200, {
+                    "BreachMetrics": None,
+                    "ExposedBreaches": None,
+                    "PastesSummary": {"cnt": 0},
+                }
+            if url.rstrip("/").endswith("/v1/breaches"):
+                return 200, {
+                    "exposedBreaches": [
+                        {
+                            "breachID": "Wattpad",
+                            "breachedDate": "2020-06-01T00:00:00+00:00",
+                            "addedDate": "2023-11-08T06:30:32+00:00",
+                            "exposedData": ["Email addresses", "IP addresses"],
+                            "exposedRecords": 268113400,
+                            "exposureDescription": "Wattpad breach",
+                            "domain": "wattpad.com",
+                            "verified": True,
+                        },
+                        {
+                            "breachID": "Dunzo",
+                            "breachedDate": "2019-07-01T00:00:00+00:00",
+                            "addedDate": "2021-01-01T00:00:00+00:00",
+                            "exposedData": ["Email addresses", "Phone numbers"],
+                            "exposedRecords": 3500000,
+                            "exposureDescription": "Dunzo breach",
+                            "domain": "dunzo.com",
+                            "verified": True,
+                        },
+                    ]
+                }
+            return 404, {}
+
+        with patch.object(bl, "_http_get_json", side_effect=fake_http):
+            r = bl.check_breach("email", "user@example.com")
+        assert r.status == "exposed"
+        assert r.breach_count == 2
+        by_name = {b.name: b for b in r.breaches}
+        assert by_name["Wattpad"].breach_date == "2020-06-01"
+        assert by_name["Wattpad"].breach_date_precision == "day"
+        assert any("IP addresses" in c for c in by_name["Wattpad"].data_classes)
+        assert by_name["Dunzo"].breach_date_precision == "day"
+
+
+def test_xon_exposed_response():
+    with _Env(GUARDIAN_BREACH_PROVIDER="xposedornot", GUARDIAN_BREACH_NO_CATALOG="1"):
         def fake_http(url, headers=None):
             if "check-email" in url:
                 return 200, {"breaches": [["LinkedIn"]]}
@@ -262,24 +365,30 @@ def test_xon_exposed_response():
         assert r.breaches[0].pwn_count == 164611595
         assert "Email addresses" in r.breaches[0].data_classes
         assert r.timeline
-        assert r.timeline[0]["date"] == "2012"
+        assert "2012" in r.timeline[0]["date"]
 
 
 def test_xon_fast_skips_analytics_enrichment():
     with _Env(GUARDIAN_BREACH_PROVIDER="xposedornot", GUARDIAN_BREACH_FAST="1"):
+        bl._xon_catalog_cache.clear()
+        bl._xon_catalog_index = None
         calls: list[str] = []
 
         def fake_http(url, headers=None):
             calls.append(url)
             if "check-email" in url:
                 return 200, {"breaches": [["Wattpad"]]}
+            if url.rstrip("/").endswith("/v1/breaches"):
+                return 200, {"exposedBreaches": []}
+            if "breach_id=Wattpad" in url:
+                return 200, {"exposedBreaches": []}
             raise AssertionError("analytics should not be called in fast mode")
 
         with patch.object(bl, "_http_get_json", side_effect=fake_http):
             r = bl.check_breach("email", "test@example.com")
         assert r.status == "exposed"
-        assert r.breaches[0].breach_date == "unknown"
-        assert len(calls) == 1
+        assert not any("breach-analytics" in u for u in calls)
+        assert any("check-email" in u for u in calls)
 
 
 def test_xon_phone_not_supported():

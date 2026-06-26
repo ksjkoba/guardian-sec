@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="guardian-ui-version" content="17">
+<meta name="guardian-ui-version" content="20">
 <title>Guardian — Security Dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -3525,13 +3525,34 @@ function renderBreachFootnote(data) {
   return parts.length ? `<div class="result-footnote">${parts.map(esc).join(' · ')}</div>` : '';
 }
 
-function formatBreachDate(raw) {
+function formatBreachDate(raw, precision) {
   const d = (raw || '').trim();
   if (!d || d.toLowerCase() === 'unknown') return 'Date unknown';
-  if (/^\d{4}$/.test(d)) return d;
-  const yearOnly = d.match(/^(\d{4})-01-01$/);
-  if (yearOnly) return yearOnly[1];
+  if (precision === 'year' || /^\d{4}$/.test(d)) return `${d.slice(0, 4)} (year only)`;
+  const iso = d.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (iso) {
+    const dt = new Date(Date.UTC(+iso[1], +iso[2] - 1, +iso[3]));
+    return dt.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' });
+  }
   return d;
+}
+
+function formatIndexedDate(raw) {
+  const d = (raw || '').trim();
+  if (!d || d.toLowerCase() === 'unknown') return '';
+  return `Indexed ${formatBreachDate(d, 'day')}`;
+}
+
+function formatNetworkExposure(dataClasses) {
+  const classes = dataClasses || [];
+  const bits = [];
+  if (classes.some(c => /ip address/i.test(c))) {
+    bits.push('IP addresses were exposed in this breach (not your personal IP)');
+  }
+  if (classes.some(c => /\bmac\b/i.test(c) || /mac address/i.test(c))) {
+    bits.push('MAC addresses were exposed in this breach (not your device MAC)');
+  }
+  return bits.length ? `<div class="breach-row-meta" style="margin-top:6px">${bits.map(esc).join(' · ')}</div>` : '';
 }
 
 function formatBreachMeta(b, provider) {
@@ -3552,11 +3573,13 @@ function renderCompactBreaches(breaches, provider) {
     <div class="breach-row">
       <div class="breach-row-head">
         <strong>${esc(b.name)}</strong>
-        <span class="breach-row-date">${esc(formatBreachDate(b.breach_date))}</span>
+        <span class="breach-row-date">${esc(formatBreachDate(b.breach_date, b.breach_date_precision))}</span>
       </div>
       <div class="breach-row-meta">${formatBreachMeta(b, provider)}</div>
+      ${formatIndexedDate(b.added_date) ? `<div class="breach-row-meta" style="margin-top:4px">${esc(formatIndexedDate(b.added_date))}</div>` : ''}
       ${b.description ? `<div class="breach-row-desc">${esc(b.description)}</div>` : ''}
       ${(b.data_classes || []).length ? `<div style="margin-top:8px">${(b.data_classes || []).map(d => `<span class="data-tag">${esc(d)}</span>`).join('')}</div>` : ''}
+      ${formatNetworkExposure(b.data_classes)}
       ${provider === 'mock' && b.demo_location ? `<div class="breach-row-meta" style="margin-top:4px">${esc(b.demo_location)} (demo)</div>` : ''}
     </div>`).join('');
 }
@@ -3606,12 +3629,12 @@ function renderBreachResult(data) {
     : '';
   const timelineHtml = (data.timeline || []).map(t => `
     <div class="timeline-item">
-      <span class="timeline-date">${esc(formatBreachDate(t.date))}</span>
+      <span class="timeline-date">${esc(t.date)}</span>
       <span class="timeline-kind">${esc(t.kind)}</span>
       <span>${esc(t.label)}</span>
     </div>`).join('');
   const apiLimitNote = data.provider !== 'mock'
-    ? `<p class="breach-api-note">Public breach APIs confirm whether your identifier appears in a breach and what data types were exposed. They do not return your IP address, MAC address, or how many accounts share your email within a breach.</p>`
+    ? `<div class="breach-api-note"><p><strong>What Guardian can show (free sources)</strong> — breach dates, when indexed, total records affected, and data types leaked (e.g. passwords, phone numbers, IP addresses <em>as a category</em>).</p><p><strong>What no breach API returns for your email</strong> — your personal IP address, MAC address, or the exact minute you were breached. Have I Been Pwned shows the same breach-level metadata, not per-user device identifiers. VirusTotal is for files/URLs/malware intelligence, not personal email breach timelines.</p><p>For HIBP-grade detail, add <code>HIBP_API_KEY</code> in Settings → provider <em>hibp</em> or <em>auto</em>.</p></div>`
     : '';
   const breachesHtml = renderCompactBreaches(data.breaches, data.provider);
   const pastesHtml = (data.pastes || []).map(p => `

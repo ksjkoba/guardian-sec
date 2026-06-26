@@ -21,6 +21,8 @@ from __future__ import annotations
 import hashlib
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FuturesTimeoutError
+from datetime import datetime
+from email.utils import parsedate_to_datetime
 import json
 import os
 import re
@@ -76,6 +78,7 @@ class BreachIncident:
     is_verified: bool = True
     domain: str = ""
     source_provider: str = ""
+    breach_date_precision: str = "unknown"  # day | year | unknown
     # Demo-only fields for UI testing — not available from real HIBP
     demo_ip: str = ""
     demo_location: str = ""
@@ -369,15 +372,19 @@ def _timeline_sort_key(date: str) -> tuple[int, str]:
     return (1, d)
 
 
-def _format_timeline_date(date: str) -> str:
+def _format_timeline_date(date: str, *, precision: str = "unknown") -> str:
     d = (date or "").strip()
     if not d or d.lower() == "unknown":
         return "Date unknown"
-    if re.fullmatch(r"\d{4}", d):
-        return d
-    m = re.fullmatch(r"(\d{4})-01-01", d)
-    if m:
-        return m.group(1)
+    if precision == "year" or re.fullmatch(r"\d{4}", d):
+        year = d[:4] if len(d) >= 4 else d
+        return f"{year} (year only)"
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", d):
+        try:
+            dt = datetime.strptime(d, "%Y-%m-%d")
+            return dt.strftime("%d %b %Y")
+        except ValueError:
+            return d
     return d
 
 
@@ -392,7 +399,14 @@ def _build_timeline(breaches: list[BreachIncident], pastes: list[PasteExposure])
             label = f"{b.name} — {detail}"
         else:
             label = b.name
-        events.append((b.breach_date, "breach", label, _format_timeline_date(b.breach_date)))
+        events.append(
+            (
+                b.breach_date,
+                "breach",
+                label,
+                _format_timeline_date(b.breach_date, precision=b.breach_date_precision),
+            )
+        )
     for p in pastes:
         events.append(
             (p.exposed_date, "paste", f"{p.source}: {p.title}", _format_timeline_date(p.exposed_date))
@@ -947,7 +961,7 @@ def _breach_http_get(url: str, headers: dict[str, str] | None = None) -> bytes:
 
 
 def _breach_cache_key(provider: str, identifier_type: str, value: str) -> str:
-    return f"{provider}:{identifier_type}:{_hash_identifier(value)}"
+    return f"v4:{provider}:{identifier_type}:{_hash_identifier(value)}"
 
 
 def _result_from_dict(d: dict[str, Any]) -> BreachCheckResult:
@@ -1046,18 +1060,192 @@ def _breach_cache_set(
             _breach_cache.pop(oldest, None)
 
 
-def _parse_xon_data_classes(raw: str) -> list[str]:
+def _parse_xon_data_classes(raw: str | list[Any]) -> list[str]:
+    if isinstance(raw, list):
+        return [str(p).strip() for p in raw if str(p).strip()]
     if not raw:
         return []
-    parts = re.split(r"[;,]", raw)
+    parts = re.split(r"[;,]", str(raw))
     return [p.strip() for p in parts if p.strip()]
+
+
+def _parse_breach_date(raw: Any) -> tuple[str, str]:
+    """Normalize a provider date to (iso_date, precision). precision: day | year | unknown."""
+    if raw is None:
+        return "unknown", "unknown"
+    text = str(raw).strip()
+    if not text or text.lower() == "unknown":
+        return "unknown", "unknown"
+    if re.fullmatch(r"\d{4}", text):
+        return f"{text}-01-01", "year"
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", text):
+        return text, "day"
+    if "T" in text:
+        try:
+            dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
+            return dt.date().isoformat(), "day"
+        except ValueError:
+            pass
+    try:
+        dt = parsedate_to_datetime(text)
+        return dt.date().isoformat(), "day"
+    except (TypeError, ValueError, IndexError, OverflowError):
+        pass
+    return text, "unknown"
+
+
+_xon_catalog_cache: dict[str, dict[str, Any] | None] = {}
+_xon_catalog_index: dict[str, dict[str, Any]] | None = None
+_xon_catalog_index_loaded_at: float = 0.0
+_xon_catalog_index_failed_at: float = 0.0
+_XON_CATALOG_INDEX_TTL = int(os.environ.get("GUARDIAN_XON_CATALOG_TTL", "86400"))
+_XON_CATALOG_RETRY_SECS = 120
+_xon_catalog_lock = threading.Lock()
+
+
+def _xon_load_catalog_index(*, force: bool = False) -> dict[str, dict[str, Any]]:
+    """Load all known breaches once (single API call) and index by normalized breach ID."""
+    global _xon_catalog_index, _xon_catalog_index_loaded_at, _xon_catalog_index_failed_at
+    now = time.time()
+    with _xon_catalog_lock:
+        if (
+            not force
+            and _xon_catalog_index is not None
+            and _xon_catalog_index
+            and now - _xon_catalog_index_loaded_at < _XON_CATALOG_INDEX_TTL
+        ):
+            return _xon_catalog_index
+        if (
+            not force
+            and _xon_catalog_index_failed_at
+            and now - _xon_catalog_index_failed_at < _XON_CATALOG_RETRY_SECS
+        ):
+            return _xon_catalog_index or {}
+
+    status, data = _http_get_json(f"{XON_API_BASE}/v1/breaches")
+    index: dict[str, dict[str, Any]] = {}
+    if status == 200 and isinstance(data, dict):
+        for item in data.get("exposedBreaches") or []:
+            if not isinstance(item, dict):
+                continue
+            breach_id = str(item.get("breachID") or item.get("breach") or "")
+            key = _normalize_breach_name(breach_id)
+            if key:
+                index[key] = item
+
+    with _xon_catalog_lock:
+        if index:
+            _xon_catalog_index = index
+            _xon_catalog_index_loaded_at = now
+            _xon_catalog_index_failed_at = 0.0
+            _xon_catalog_cache.clear()
+            return index
+        _xon_catalog_index_failed_at = now
+        return _xon_catalog_index or {}
+
+
+def _xon_fetch_breach_catalog(breach_name: str) -> dict[str, Any] | None:
+    cache_key = _normalize_breach_name(breach_name)
+    if not cache_key:
+        return None
+    with _xon_catalog_lock:
+        if cache_key in _xon_catalog_cache:
+            return _xon_catalog_cache[cache_key]
+    entry = _xon_load_catalog_index().get(cache_key)
+    if entry is None:
+        q = urllib.parse.quote(breach_name, safe="")
+        status, data = _http_get_json(f"{XON_API_BASE}/v1/breaches?breach_id={q}")
+        if status == 200 and isinstance(data, dict):
+            for item in data.get("exposedBreaches") or []:
+                if not isinstance(item, dict):
+                    continue
+                if _normalize_breach_name(str(item.get("breachID") or "")) == cache_key:
+                    entry = item
+                    break
+    with _xon_catalog_lock:
+        _xon_catalog_cache[cache_key] = entry
+    return entry
+
+
+def _xon_catalog_fields(entry: dict[str, Any]) -> dict[str, Any]:
+    breach_date, precision = _parse_breach_date(entry.get("breachedDate"))
+    added_date, _ = _parse_breach_date(entry.get("addedDate"))
+    records = entry.get("exposedRecords") or 0
+    try:
+        pwn_count = int(records)
+    except (TypeError, ValueError):
+        pwn_count = 0
+    return {
+        "breach_date": breach_date,
+        "breach_date_precision": precision,
+        "added_date": added_date,
+        "data_classes": _parse_xon_data_classes(entry.get("exposedData") or []),
+        "description": str(entry.get("exposureDescription") or ""),
+        "pwn_count": pwn_count,
+        "domain": str(entry.get("domain") or ""),
+        "is_verified": bool(entry.get("verified", True)),
+    }
+
+
+def _prefer_date(existing: str, existing_precision: str, new: str, new_precision: str) -> tuple[str, str]:
+    rank = {"unknown": 0, "year": 1, "day": 2}
+    if rank.get(new_precision, 0) > rank.get(existing_precision, 0):
+        return new, new_precision
+    if existing and existing != "unknown":
+        return existing, existing_precision
+    return new, new_precision
+
+
+def _xon_enrich_breach(incident: BreachIncident) -> BreachIncident:
+    if os.environ.get("GUARDIAN_BREACH_NO_CATALOG", "").lower() in ("1", "true", "yes"):
+        return incident
+    if (
+        incident.breach_date_precision == "day"
+        and incident.data_classes
+        and incident.pwn_count > 0
+        and not incident.description.startswith("Listed in")
+    ):
+        return incident
+    catalog = _xon_fetch_breach_catalog(incident.name)
+    if not catalog:
+        return incident
+    info = _xon_catalog_fields(catalog)
+    breach_date, precision = _prefer_date(
+        incident.breach_date,
+        incident.breach_date_precision,
+        info["breach_date"],
+        info["breach_date_precision"],
+    )
+    added_date = info["added_date"] if info["added_date"] != "unknown" else incident.added_date
+    data_classes = info["data_classes"] or incident.data_classes
+    description = info["description"] or incident.description
+    pwn_count = info["pwn_count"] or incident.pwn_count
+    domain = info["domain"] or incident.domain
+    return BreachIncident(
+        name=incident.name,
+        breach_date=breach_date,
+        added_date=added_date,
+        data_classes=data_classes,
+        description=description,
+        pwn_count=pwn_count,
+        is_verified=info["is_verified"] if info["is_verified"] is not None else incident.is_verified,
+        domain=domain,
+        source_provider=incident.source_provider or "XposedOrNot",
+        breach_date_precision=precision,
+        demo_ip=incident.demo_ip,
+        demo_location=incident.demo_location,
+    )
+
+
+def _xon_enrich_breaches(breaches: list[BreachIncident]) -> list[BreachIncident]:
+    return [_xon_enrich_breach(b) for b in breaches]
 
 
 def _xon_breach_from_detail(item: dict[str, Any]) -> BreachIncident:
     name = str(item.get("breach") or item.get("name") or "Unknown")
-    year = str(item.get("xposed_date") or item.get("breach_date") or "")
-    breach_date = f"{year}-01-01" if year.isdigit() else year or "unknown"
-    records = item.get("xposed_records") or item.get("pwn_count") or 0
+    raw_date = item.get("xposed_date") or item.get("breach_date") or item.get("breachedDate") or ""
+    breach_date, precision = _parse_breach_date(raw_date)
+    records = item.get("xposed_records") or item.get("pwn_count") or item.get("exposedRecords") or 0
     try:
         pwn_count = int(records)
     except (TypeError, ValueError):
@@ -1066,12 +1254,13 @@ def _xon_breach_from_detail(item: dict[str, Any]) -> BreachIncident:
         name=name,
         breach_date=breach_date,
         added_date=breach_date,
-        data_classes=_parse_xon_data_classes(str(item.get("xposed_data") or "")),
-        description=str(item.get("details") or f"Data breach involving {name}."),
+        data_classes=_parse_xon_data_classes(item.get("xposed_data") or item.get("exposedData") or ""),
+        description=str(item.get("details") or item.get("exposureDescription") or f"Data breach involving {name}."),
         pwn_count=pwn_count,
         is_verified=str(item.get("verified", "Yes")).lower() in ("yes", "true", "1"),
         domain=str(item.get("domain") or ""),
         source_provider="XposedOrNot",
+        breach_date_precision=precision,
     )
 
 
@@ -1188,6 +1377,7 @@ def _query_xon_analytics(email: str) -> dict[str, Any]:
         return {"ok": True, "breaches": [], "pastes": [], "exposed": False, "error": None}
     if not has_signal and str(data.get("Error") or "").lower() == "not found":
         return {"ok": True, "breaches": [], "pastes": [], "exposed": False, "error": None}
+    breaches = _xon_enrich_breaches(breaches)
     return {"ok": True, "breaches": breaches, "pastes": pastes, "exposed": has_signal, "error": None}
 
 
@@ -1212,7 +1402,9 @@ def _query_xon_raw(email: str) -> dict[str, Any]:
 
     key = email.strip().lower()
     q = urllib.parse.quote(key, safe="")
-    status, data = _http_get_json(f"{XON_API_BASE}/v1/check-email/{q}")
+    status, data = _http_get_json(
+        f"{XON_API_BASE}/v1/check-email/{q}?include_details=true"
+    )
     if status == 429:
         return {"ok": False, "error": "rate_limit", "breaches": [], "pastes": [], "exposed": False}
     if status == 0 or not isinstance(data, dict):
@@ -1230,21 +1422,19 @@ def _query_xon_raw(email: str) -> dict[str, Any]:
         return {"ok": True, "breaches": [], "pastes": [], "exposed": False, "error": None}
 
     fast_only = os.environ.get("GUARDIAN_BREACH_FAST", "").lower() in ("1", "true", "yes")
+    breaches = _xon_enrich_breaches(_xon_stubs_from_names(names))
+    pastes: list[PasteExposure] = []
+
     if not fast_only:
         enriched = _query_xon_analytics(key)
+        pastes = enriched.get("pastes") or []
         if enriched.get("ok") and enriched.get("breaches"):
-            return {
-                "ok": True,
-                "breaches": enriched["breaches"],
-                "pastes": enriched.get("pastes") or [],
-                "exposed": True,
-                "error": None,
-            }
+            breaches = _merge_breach_lists([breaches, enriched["breaches"]])
 
     return {
         "ok": True,
-        "breaches": _xon_stubs_from_names(names),
-        "pastes": [],
+        "breaches": breaches,
+        "pastes": pastes,
         "exposed": True,
         "error": None,
     }
@@ -1310,6 +1500,7 @@ def _query_hackmyip_raw(email: str) -> dict[str, Any]:
         )
     count = int(payload.get("breaches") or 0)
     exposed = count > 0 or bool(breaches)
+    breaches = _xon_enrich_breaches(breaches)
     return {"ok": True, "breaches": breaches, "pastes": [], "exposed": exposed, "error": None}
 
 
@@ -1405,6 +1596,7 @@ def _multi_lookup_email(email: str) -> BreachCheckResult:
         )
 
     breaches = _merge_breach_lists([xon.get("breaches") or [], hmi.get("breaches") or []])
+    breaches = _xon_enrich_breaches(breaches)
     pastes = xon.get("pastes") or []
     exposed = bool(breaches or pastes) or bool(xon.get("exposed")) or bool(hmi.get("exposed"))
 
@@ -1626,18 +1818,24 @@ def _xposedornot_lookup(identifier_type: IdentifierType, value: str) -> BreachCh
 
 def _hibp_breach_from_api(item: dict[str, Any]) -> BreachIncident:
     data_classes = item.get("DataClasses") or []
+    breach_date, precision = _parse_breach_date(item.get("BreachDate"))
+    added_date, _ = _parse_breach_date(item.get("AddedDate"))
+    if added_date == "unknown":
+        added_date = breach_date
     if not isinstance(data_classes, list):
         data_classes = []
     desc = _strip_html(str(item.get("Description") or ""))
     return BreachIncident(
         name=str(item.get("Title") or item.get("Name") or "Unknown"),
-        breach_date=str(item.get("BreachDate") or "unknown"),
-        added_date=str(item.get("AddedDate") or item.get("BreachDate") or "unknown"),
+        breach_date=breach_date,
+        added_date=added_date,
         data_classes=[str(d) for d in data_classes],
         description=desc,
         pwn_count=int(item.get("PwnCount") or 0),
         is_verified=bool(item.get("IsVerified", True)),
         domain=str(item.get("Domain") or ""),
+        source_provider="HIBP",
+        breach_date_precision=precision,
     )
 
 
