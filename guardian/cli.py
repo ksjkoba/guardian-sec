@@ -1110,7 +1110,7 @@ def serve(
         console.print("[yellow]Run: pip install fastapi uvicorn[/yellow]")
         sys.exit(1)
 
-    _load_engine(model)
+    _load_engine(model, required=False)
     _init_ti(no_ti=no_ti, force_refresh=refresh_feeds)
 
     # Set up dashboard state
@@ -1207,7 +1207,7 @@ def serve(
 
 # ─── helpers ─────────────────────────────────────────────────────────────────
 
-def _load_engine(model: Optional[str]) -> None:
+def _load_engine(model: Optional[str], *, required: bool = True) -> None:
     from guardian.engine.slm import get_engine
 
     with console.status("[dim]Loading Phi-3-mini...[/dim]"):
@@ -1216,10 +1216,16 @@ def _load_engine(model: Optional[str]) -> None:
         except FileNotFoundError as e:
             console.print(f"[red]{e}[/red]")
             console.print("[yellow]Run: guardian download-model[/yellow]")
-            sys.exit(1)
+            if required:
+                sys.exit(1)
         except ImportError as e:
-            console.print(f"[red]{e}[/red]")
-            sys.exit(1)
+            console.print(f"[yellow]{e}[/yellow]")
+            if required:
+                sys.exit(1)
+            console.print(
+                "[dim]Continuing without the local SLM — dashboard, breach checks, "
+                "and threat feeds still work.[/dim]"
+            )
 
 
 def main() -> None:
