@@ -8,6 +8,7 @@ from typing import Iterator
 
 _LOCK = threading.Lock()
 _instance: "SLMEngine | None" = None
+_configured_model_path: Path | str | None = None
 
 DEFAULT_MODEL_PATH = Path(__file__).parents[2] / "models" / "Phi-3-mini-4k-instruct-q4.gguf"
 
@@ -88,10 +89,26 @@ class SLMEngine:
                     yield delta["content"]
 
 
+def set_model_path(model_path: Path | str | None) -> None:
+    """Register the model path to use for lazy initialization.
+
+    Lets callers (e.g. `guardian serve --model ...`) honor a custom model
+    without eagerly loading it: the path is remembered and applied on the
+    first `get_engine()` call made by a module that actually needs inference.
+    """
+    global _configured_model_path
+    _configured_model_path = model_path
+
+
+def is_loaded() -> bool:
+    """True if the SLM has already been initialized into memory."""
+    return _instance is not None
+
+
 def get_engine(model_path: Path | str | None = None) -> SLMEngine:
     """Return the global singleton SLMEngine, initializing it on first call."""
     global _instance
     with _LOCK:
         if _instance is None:
-            _instance = SLMEngine(model_path=model_path)
+            _instance = SLMEngine(model_path=model_path or _configured_model_path)
     return _instance
