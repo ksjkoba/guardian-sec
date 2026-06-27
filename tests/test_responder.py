@@ -54,6 +54,94 @@ def test_quarantine_file_dry_run(tmp_path):
     assert f.exists()
 
 
+# ─── Quarantine safety guard ──────────────────────────────────────────────────
+
+def test_quarantine_refuses_symlink_and_spares_target(tmp_path, monkeypatch):
+    """A symlink must be refused, and its target left completely untouched."""
+    import os
+    import guardian.engine.responder as responder
+
+    monkeypatch.setattr(responder, "QUARANTINE_DIR", tmp_path / "q")
+
+    target = tmp_path / "important"
+    target.write_text("critical data")
+    target.chmod(0o755)
+    link = tmp_path / "payload.sh"
+    os.symlink(str(target), str(link))
+
+    result = quarantine_file(str(link), dry_run=False)
+
+    assert result.success is False
+    assert "symlink" in result.message.lower()
+    # Target must be fully intact: still present, contents and mode unchanged.
+    assert target.exists()
+    assert target.read_text() == "critical data"
+    assert (target.stat().st_mode & 0o777) == 0o755
+    # The symlink itself must not have been moved.
+    assert link.is_symlink()
+
+
+def test_quarantine_refuses_protected_path(monkeypatch, tmp_path):
+    import guardian.engine.responder as responder
+    monkeypatch.setattr(responder, "QUARANTINE_DIR", tmp_path / "q")
+    result = quarantine_file("/etc/passwd", dry_run=False)
+    assert result.success is False
+    assert "protected" in result.message.lower()
+
+
+def test_quarantine_refuses_directory(tmp_path, monkeypatch):
+    import guardian.engine.responder as responder
+    monkeypatch.setattr(responder, "QUARANTINE_DIR", tmp_path / "q")
+    d = tmp_path / "adir"
+    d.mkdir()
+    result = quarantine_file(str(d), dry_run=False)
+    assert result.success is False
+    assert "regular file" in result.message.lower()
+
+
+def test_quarantine_refuses_missing_file(tmp_path, monkeypatch):
+    import guardian.engine.responder as responder
+    monkeypatch.setattr(responder, "QUARANTINE_DIR", tmp_path / "q")
+    result = quarantine_file(str(tmp_path / "nope"), dry_run=False)
+    assert result.success is False
+
+
+def test_quarantine_moves_regular_file(tmp_path, monkeypatch):
+    """A genuine malicious regular file is moved into quarantine."""
+    import guardian.engine.responder as responder
+    qdir = tmp_path / "q"
+    monkeypatch.setattr(responder, "QUARANTINE_DIR", qdir)
+
+    f = tmp_path / "malware.sh"
+    f.write_text("#!/bin/bash\n")
+    f.chmod(0o755)
+
+    result = quarantine_file(str(f), dry_run=False)
+
+    assert result.success is True
+    assert not f.exists()                      # moved out
+    moved = list(qdir.glob("malware.sh.*.quarantine"))
+    assert len(moved) == 1
+
+
+def test_quarantine_dest_no_collision(tmp_path, monkeypatch):
+    """Two same-named files quarantined in the same second don't collide."""
+    import guardian.engine.responder as responder
+    qdir = tmp_path / "q"
+    monkeypatch.setattr(responder, "QUARANTINE_DIR", qdir)
+
+    for sub in ("a", "b"):
+        d = tmp_path / sub
+        d.mkdir()
+        f = d / "dup.sh"
+        f.write_text("x")
+        r = quarantine_file(str(f), dry_run=False)
+        assert r.success is True
+
+    moved = list(qdir.glob("dup.sh.*.quarantine"))
+    assert len(moved) == 2  # both preserved, no overwrite
+
+
 def test_auto_responder_below_threshold_skips():
     responder = AutoResponder(dry_run=True, min_severity=Severity.HIGH)
     alert = _make_alert(severity=Severity.LOW)

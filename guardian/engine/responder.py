@@ -261,10 +261,78 @@ def block_ip(ip: str, dry_run: bool = DRY_RUN_DEFAULT) -> ResponseResult:
 
 QUARANTINE_DIR = Path("/var/guardian/quarantine")
 
+# Path prefixes that must never be quarantined — moving or chmod-ing these would
+# brick the host. Same "untrusted input drives a destructive action" risk class
+# as IP blocking: a crafted/symlinked path must not let Guardian wreck the OS.
+_PROTECTED_PREFIXES = (
+    "/etc", "/bin", "/sbin", "/lib", "/lib64", "/usr", "/boot",
+    "/dev", "/proc", "/sys", "/run", "/var/log", "/var/guardian",
+)
+
+
+def _quarantine_refusal(path: Path, reason: str, dry_run: bool) -> ResponseResult:
+    result = ResponseResult(
+        action=ResponseAction.QUARANTINE_FILE,
+        target=str(path),
+        success=False,
+        dry_run=dry_run,
+        message=f"Refused to quarantine {str(path)!r}: {reason}",
+    )
+    _audit(result)
+    return result
+
+
+def _quarantine_refusal_reason(path: Path) -> str | None:
+    """Return a refusal reason if the path is unsafe to quarantine, else None.
+
+    Uses lstat-based checks so a symlink is never followed: quarantining a
+    symlink would let an attacker who planted it in a watched dir redirect our
+    chmod/move onto an arbitrary target file.
+    """
+    try:
+        st = os.lstat(path)
+    except OSError as e:
+        return f"cannot stat ({e})"
+
+    import stat as _stat
+    if _stat.S_ISLNK(st.st_mode):
+        return "path is a symlink (would redirect chmod/move to its target)"
+    if not _stat.S_ISREG(st.st_mode):
+        return "not a regular file"
+
+    # Resolve without following the final component's symlink semantics for the
+    # protection check: compare the absolute, normalized path against protected
+    # roots. We intentionally do NOT resolve() (which follows symlinks) — the
+    # symlink check above already rejects links.
+    abs_path = os.path.normpath(os.path.abspath(str(path)))
+    for prefix in _PROTECTED_PREFIXES:
+        if abs_path == prefix or abs_path.startswith(prefix + os.sep):
+            return f"protected system location ({prefix})"
+    return None
+
+
+def _unique_quarantine_dest(name: str) -> Path:
+    """A collision-free destination inside QUARANTINE_DIR for a basename."""
+    base = name or "unnamed"
+    stamp = int(time.time())
+    candidate = QUARANTINE_DIR / f"{base}.{stamp}.quarantine"
+    counter = 1
+    while candidate.exists():
+        candidate = QUARANTINE_DIR / f"{base}.{stamp}.{counter}.quarantine"
+        counter += 1
+    return candidate
+
 
 def quarantine_file(path: str | Path, dry_run: bool = DRY_RUN_DEFAULT) -> ResponseResult:
     path = Path(path)
-    dest = QUARANTINE_DIR / f"{path.name}.{int(time.time())}.quarantine"
+
+    # Safety guard: refuse symlinks, non-regular files, and protected locations
+    # even on a direct call (defense in depth).
+    reason = _quarantine_refusal_reason(path)
+    if reason is not None:
+        return _quarantine_refusal(path, reason, dry_run)
+
+    dest = _unique_quarantine_dest(path.name)
 
     if dry_run:
         result = ResponseResult(
@@ -279,7 +347,13 @@ def quarantine_file(path: str | Path, dry_run: bool = DRY_RUN_DEFAULT) -> Respon
 
     try:
         QUARANTINE_DIR.mkdir(parents=True, exist_ok=True)
-        # Remove execute bits first, then move
+        # Re-check just before acting (TOCTOU mitigation): the file could have
+        # been swapped for a symlink between the initial check and now.
+        reason = _quarantine_refusal_reason(path)
+        if reason is not None:
+            return _quarantine_refusal(path, reason, dry_run)
+        # Remove execute bits first, then move. Safe now that we've confirmed
+        # the path is a regular, non-symlink file.
         try:
             path.chmod(path.stat().st_mode & ~0o111)
         except OSError:
