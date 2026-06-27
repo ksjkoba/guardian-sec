@@ -30,3 +30,5 @@ guardian_response_audit.jsonl
 Thumbs.db
 *.swp
 *:Zone.Identifier
+bin/
+cloudflared.log

@@ -25,6 +25,28 @@ GUARDIAN_DEPLOY_MODE=local
 
 ---
 
+## Free public URL (no VPS) — Cloudflare Tunnel
+
+The fastest **$0** way to put Guardian online for others, straight from your PC
+(works behind NAT/WSL2, no router or firewall changes, HTTPS included):
+
+```bash
+./scripts/serve-public.sh
+```
+
+This downloads `cloudflared` (once), starts the **password-protected** dashboard,
+opens a Cloudflare tunnel, and prints a public `https://…trycloudflare.com` URL.
+Share that URL plus the dashboard password (in `.env`).
+
+Notes:
+- The dashboard is only reachable while the script (your PC) is running.
+- The quick-tunnel URL is random and changes on restart. For a **stable custom
+  URL** (still free), create a free Cloudflare account + domain and use a named
+  tunnel — the script prints the exact commands.
+- Always keep the dashboard password set; the tunnel is open to the internet.
+
+---
+
 ## Server / VPS (public)
 
 > **Important:** Set a dashboard password for any network-exposed deployment.
