@@ -2941,7 +2941,8 @@ function moduleLabel(m, a) {
     const src = a.global_source || (a.metadata && a.metadata.global_source);
     if (src && SOURCE_LABELS[src]) return '🌍 ' + SOURCE_LABELS[src];
   }
-  return MODULE_LABELS[m] || m.replace(/_/g, ' ');
+  if (!m) return 'unknown';
+  return MODULE_LABELS[m] || String(m).replace(/_/g, ' ');
 }
 function sourceBadgeClass(a) {
   if (!(a.module === 'global_feed' || a.is_global_feed)) return 'module-badge local';
