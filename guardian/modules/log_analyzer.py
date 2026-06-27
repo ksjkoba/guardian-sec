@@ -9,7 +9,7 @@ from collections import deque
 from pathlib import Path
 from typing import Callable, Iterator
 
-from guardian.engine.alert import Alert, Severity
+from guardian.engine.alert import Alert
 from guardian.engine.slm import get_engine
 
 MODULE = "log_analyzer"
@@ -113,7 +113,6 @@ def scan_file(path: str | Path, tail: bool = False) -> Iterator[Alert]:
     if not path.exists():
         raise FileNotFoundError(path)
     results: list[Alert] = []
-    done = threading.Event()
 
     def _cb(alert: Alert) -> None:
         results.append(alert)

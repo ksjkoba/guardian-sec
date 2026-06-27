@@ -993,7 +993,7 @@ def fetch_blocklist_de(limit: int = 30) -> list[GlobalThreatItem]:
             ioc_type="ip",
             value=ip,
             title=f"blocklist.de: attack source {ip}",
-            description=f"IP reported for brute-force or abuse activity on blocklist.de.",
+            description="IP reported for brute-force or abuse activity on blocklist.de.",
             tags=("blocklist", "brute_force", "global"),
             reference="https://www.blocklist.de/en/view.html?ip=" + ip,
             external_id=f"bld:{ip}",

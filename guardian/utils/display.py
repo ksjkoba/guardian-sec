@@ -6,14 +6,12 @@ import time
 from typing import Sequence
 
 from rich.console import Console
-from rich.layout import Layout
-from rich.live import Live
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 from rich import box
 
-from guardian.engine.alert import Alert, Severity
+from guardian.engine.alert import Alert
 
 console = Console()
 

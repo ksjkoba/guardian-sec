@@ -16,9 +16,7 @@ Feeds:
 from __future__ import annotations
 
 import csv
-import hashlib
 import ipaddress
-import json
 import os
 import re
 import threading

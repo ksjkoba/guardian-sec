@@ -3,16 +3,13 @@
 from __future__ import annotations
 
 import hashlib
-import os
-import platform
 import re
-import subprocess
 import threading
 import time
 from pathlib import Path
-from typing import Callable, Iterator
+from typing import Callable
 
-from guardian.engine.alert import Alert, Severity
+from guardian.engine.alert import Alert
 from guardian.engine.slm import get_engine
 
 MODULE = "file_monitor"

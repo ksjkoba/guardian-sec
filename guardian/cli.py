@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import signal
 import subprocess
 import sys
 import threading
@@ -13,15 +12,12 @@ from pathlib import Path
 from typing import Optional
 
 import click
-from rich.console import Console
-from rich.live import Live
 from rich.panel import Panel
-from rich.spinner import Spinner
 from rich.table import Table
 from rich.text import Text
 from rich import box
 
-from guardian.engine.alert import Alert, Severity
+from guardian.engine.alert import Alert
 from guardian.engine.correlator import get_correlator, Campaign, CampaignStatus
 from guardian.engine.responder import AutoResponder, ResponseResult
 from guardian.utils.display import console, print_alert, print_banner, render_alert_table
@@ -66,7 +62,6 @@ def _on_campaign(campaign: Campaign) -> None:
 
 
 def _store_alert(alert: Alert) -> None:
-    global _enricher
     with _store_lock:
         _alert_store.append(alert)
 
@@ -682,10 +677,9 @@ def check_ioc(value: str, refresh: bool) -> None:
 @cli.command("update-feeds")
 def update_feeds() -> None:
     """Force-refresh all threat intelligence feed caches."""
-    from guardian.intel.feeds import FEEDS, load_feeds, _cache_path
+    from guardian.intel.feeds import FEEDS, load_feeds
 
     console.print(f"[bold]Updating {len(FEEDS)} TI feeds...[/bold]\n")
-    errors: list[str] = []
 
     def _progress(msg: str) -> None:
         console.print(f"  [dim]{msg}[/dim]")
@@ -1161,7 +1155,7 @@ def serve(
     dirs = list(watch_dirs) or ["/etc", "/tmp", "/var/tmp"]
     existing_dirs = [d for d in dirs if Path(d).exists()]
 
-    correlator = get_correlator(on_campaign=_on_campaign)
+    get_correlator(on_campaign=_on_campaign)
     modules_started: list[str] = []
 
     if logs:

@@ -10,7 +10,7 @@ import threading
 import time
 from typing import Any
 
-from guardian.security.crypto import decrypt_bytes, encrypt_bytes, has_crypto, require_crypto
+from guardian.security.crypto import decrypt_bytes, has_crypto, require_crypto
 
 try:
     from cryptography.hazmat.primitives.asymmetric import x25519

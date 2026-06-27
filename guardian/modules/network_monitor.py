@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-import json
-import socket
 import threading
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Callable
 
-from guardian.engine.alert import Alert, Severity
+from guardian.engine.alert import Alert
 from guardian.engine.slm import get_engine
 
 MODULE = "network_monitor"

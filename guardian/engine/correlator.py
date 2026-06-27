@@ -21,7 +21,7 @@ import uuid
 from collections import defaultdict
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Callable, Sequence
+from typing import Callable
 
 from guardian.engine.alert import Alert, Severity
 from guardian.engine.attck import Technique, map_techniques, top_technique
@@ -345,7 +345,6 @@ class Correlator:
 
         try:
             from guardian.engine.slm import get_engine
-            from guardian.engine.alert import Alert as _Alert
             import json
 
             engine = get_engine()

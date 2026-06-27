@@ -18,7 +18,6 @@ import os
 import platform
 import shutil
 import subprocess
-import sys
 import time
 import threading
 from dataclasses import dataclass, field
@@ -300,8 +299,6 @@ class AutoResponder:
 
     def respond_to_campaign(self, campaign) -> list[ResponseResult]:
         """Respond to a whole campaign — block all attacker IPs found."""
-        from guardian.engine.correlator import Campaign
-
         results: list[ResponseResult] = []
         if not self._above_threshold(campaign.severity):
             return results

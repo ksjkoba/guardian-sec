@@ -12,8 +12,8 @@ import time
 from pathlib import Path
 from typing import Any
 
-from guardian.engine.alert import Alert, Severity
-from guardian.engine.correlator import Campaign, CampaignStatus
+from guardian.engine.alert import Alert
+from guardian.engine.correlator import Campaign
 
 try:
     from contextlib import asynccontextmanager

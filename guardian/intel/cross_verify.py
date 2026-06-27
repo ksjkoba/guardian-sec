@@ -1470,7 +1470,6 @@ def cross_check(parsed: ParsedAlert, routes: list[SourceRoute]) -> list[CheckRes
 
 def _checklist_stage3(checks: list[CheckResult]) -> dict[str, Any]:
     hits = [c for c in checks if c.status == "hit"]
-    refutes = [c for c in checks if c.is_refute]
     corroborate = sum(1 for c in checks if c.is_authoritative_hit or c.is_corroborating)
     return {
         "10_api_record_returned": [c.source for c in hits],

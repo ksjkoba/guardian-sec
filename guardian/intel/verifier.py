@@ -160,7 +160,7 @@ def _verify_urlhaus(ioc_value: str, checked_at: float) -> dict[str, Any]:
                 "URLhaus",
                 checked_at,
                 "URLhaus API confirms this URL is in the database.",
-                ref=str(ref) if ref else f"https://urlhaus.abuse.ch/",
+                ref=str(ref) if ref else "https://urlhaus.abuse.ch/",
             )
     except Exception:
         pass

@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-import ast
 import re
-import threading
 from pathlib import Path
-from typing import Callable, Iterator
+from typing import Iterator
 
-from guardian.engine.alert import Alert, Severity
+from guardian.engine.alert import Alert
 from guardian.engine.slm import get_engine
 
 MODULE = "code_scanner"
@@ -162,7 +160,6 @@ def scan_config(path: str | Path) -> Iterator[Alert]:
         raise FileNotFoundError(path)
 
     content = path.read_text(errors="replace")
-    lines = content.splitlines()
     engine = get_engine()
 
     prompt = (

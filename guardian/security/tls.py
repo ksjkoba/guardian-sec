@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 import subprocess
-from pathlib import Path
 
 
 def ensure_local_tls_cert() -> tuple[str, str] | None:

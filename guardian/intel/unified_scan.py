@@ -14,7 +14,7 @@ import ipaddress
 import re
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 from urllib.parse import urlparse
 
@@ -132,7 +132,6 @@ def _scan_urlhaus(value: str, ioc_type: str) -> dict[str, Any]:
         if data.get("query_status") != "ok":
             return {"source": "URLhaus", "hit": False, "detail": data.get("query_status", "miss")}
         if endpoint == "url":
-            urls = data.get("urlhaus_reference") or data.get("id")
             threat = data.get("threat") or data.get("url_status") or "malicious"
             if data.get("url_status") in ("online", "offline") or data.get("threat"):
                 return {
