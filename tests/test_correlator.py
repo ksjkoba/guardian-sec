@@ -148,6 +148,7 @@ def test_on_campaign_fired_at_min_alerts():
     assert len(seen[0].alerts) == 2
 
 
+def test_many_related_alerts_stay_in_one_campaign():
     c = Correlator(use_slm=False)
     c.start()
     ip = "7.7.7.7"
@@ -207,3 +208,84 @@ def test_kill_chain_techniques_collected():
     ids = [t.id for t in campaign.techniques]
     assert "T1046" in ids   # nmap
     assert "T1110" in ids   # hydra
+
+
+# ─── SLM synthesis (queue routing + re-synthesis) ─────────────────────────────
+
+def test_synthesis_routes_through_analysis_queue(monkeypatch):
+    """A mature campaign submits synthesis to the shared queue, not a raw thread."""
+    submitted = []
+    monkeypatch.setattr(
+        "guardian.engine.analysis_queue.submit_analysis",
+        lambda fn: submitted.append(fn),
+    )
+
+    c = Correlator(use_slm=True)
+    c.start()
+    ip = "4.4.4.4"
+    # CAMPAIGN_SLM_THRESHOLD is 3 — the third related alert should trigger it.
+    c.ingest(_make_alert(metadata={"src_ip": ip}))
+    c.ingest(_make_alert(metadata={"src_ip": ip}))
+    c.ingest(_make_alert(metadata={"src_ip": ip}))
+
+    assert submitted, "mature campaign should enqueue synthesis on the worker"
+
+
+def test_synthesis_applies_and_tracks_count(monkeypatch):
+    """Running the enqueued job synthesizes the campaign and records the count."""
+    jobs = []
+    monkeypatch.setattr(
+        "guardian.engine.analysis_queue.submit_analysis",
+        lambda fn: jobs.append(fn),
+    )
+
+    class _FakeEngine:
+        def analyze(self, *a, **k):
+            return (
+                '{"title": "Test Campaign", "severity": "HIGH", '
+                '"attack_narrative": "n", "immediate_actions": ["x"]}'
+            )
+
+    monkeypatch.setattr("guardian.engine.slm.get_engine", lambda *a, **k: _FakeEngine())
+
+    c = Correlator(use_slm=True)
+    c.start()
+    ip = "4.4.4.5"
+    for _ in range(3):
+        c.ingest(_make_alert(metadata={"src_ip": ip}))
+
+    assert jobs
+    jobs[-1]()  # run the synthesis job as the worker would
+
+    camp = c.get_campaigns()[0]
+    assert camp.status == CampaignStatus.SYNTHESIZED
+    assert camp.title == "Test Campaign"
+    assert camp.synthesized_alert_count == 3
+
+
+def test_resynthesis_skipped_until_significant_growth(monkeypatch):
+    """An already-synthesized campaign is not re-synthesized until ~50% growth."""
+    calls = {"n": 0}
+
+    class _FakeEngine:
+        def analyze(self, *a, **k):
+            calls["n"] += 1
+            return (
+                '{"title": "C", "severity": "HIGH", '
+                '"attack_narrative": "n", "immediate_actions": []}'
+            )
+
+    monkeypatch.setattr("guardian.engine.slm.get_engine", lambda *a, **k: _FakeEngine())
+
+    c = Correlator(use_slm=True)
+    c.start()
+    camp = Campaign(status=CampaignStatus.SYNTHESIZED, synthesized_alert_count=4)
+    camp.alerts = [_make_alert() for _ in range(5)]  # 5 < 4*1.5 == 6 → skip
+
+    c._synthesize(camp)
+    assert calls["n"] == 0, "should skip re-synthesis below the growth threshold"
+
+    camp.alerts = [_make_alert() for _ in range(6)]  # 6 >= 6 → re-synthesize
+    c._synthesize(camp)
+    assert calls["n"] == 1
+    assert camp.synthesized_alert_count == 6
