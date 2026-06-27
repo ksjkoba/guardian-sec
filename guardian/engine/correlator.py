@@ -56,6 +56,9 @@ class Campaign:
     synthesis: str = ""   # SLM-generated campaign summary
     severity: Severity = Severity.MEDIUM
     title: str = ""
+    # Recommended responses for this campaign (from SLM synthesis or the
+    # rule-based fallback). Surfaced to the dashboard via to_dict().
+    immediate_actions: list[str] = field(default_factory=list)
     # Alert count at the time SLM synthesis last ran — used to decide when a
     # campaign has grown enough to warrant re-synthesis.
     synthesized_alert_count: int = 0
@@ -100,6 +103,7 @@ class Campaign:
             "techniques": [{"id": t.id, "name": t.name, "tactic": t.tactic} for t in self.techniques],
             "entities": sorted(self.entities),
             "synthesis": self.synthesis,
+            "immediate_actions": list(self.immediate_actions),
             "alerts": [a.to_dict() for a in self.alerts],
         }
 
@@ -194,7 +198,11 @@ def _apply_synthesis_data(campaign: "Campaign", data: dict[str, object]) -> None
     except ValueError:
         pass
     campaign.status = CampaignStatus.SYNTHESIZED
-    campaign.metadata_extra = data.get("immediate_actions", [])  # type: ignore[attr-defined]
+    raw_actions = data.get("immediate_actions", [])
+    if isinstance(raw_actions, list):
+        campaign.immediate_actions = [str(a) for a in raw_actions if a]
+    else:
+        campaign.immediate_actions = []
 
 
 def _ensure_baseline_narrative(campaign: "Campaign") -> None:

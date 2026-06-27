@@ -45,11 +45,11 @@ def test_local_dashboard_url():
 def test_vps_public_url_https():
     with _Env(
         GUARDIAN_DEPLOY_MODE="vps",
-        GUARDIAN_PUBLIC_HOST="guardian.learniam.online",
+        GUARDIAN_PUBLIC_HOST="guardian.example.com",
         GUARDIAN_PUBLIC_PORT="443",
-        GUARDIAN_TLS_CERT="/etc/letsencrypt/live/guardian.learniam.online/fullchain.pem",
+        GUARDIAN_TLS_CERT="/etc/letsencrypt/live/guardian.example.com/fullchain.pem",
     ):
-        assert deploy.dashboard_base_url() == "https://guardian.learniam.online/"
+        assert deploy.dashboard_base_url() == "https://guardian.example.com/"
 
 
 def test_vps_bind_host_default():

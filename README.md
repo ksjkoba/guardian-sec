@@ -123,7 +123,7 @@ docs/               # handoff + deployment notes
 ## Docs
 
 - [`docs/guardian-handoff.md`](docs/guardian-handoff.md) — project context and architecture
-- [`docs/deployment-learniam.md`](docs/deployment-learniam.md) — domain, landing page, and VPS deployment
+- [`docs/deployment.md`](docs/deployment.md) — local and VPS deployment guide
 
 ## Security & deployment posture
 
@@ -134,7 +134,7 @@ Guardian is designed **local-first** — a personal SOC dashboard bound to `127.
 - **Exposing the dashboard to a network or the internet is not recommended without a hardened front end.** Put it behind a reverse proxy that terminates TLS and enforces authentication (basic auth, mTLS, or SSO). The built-in session handshake provides end-to-end payload encryption, **not** access control — anyone who can reach a public dashboard can complete the handshake.
 - **Active response is dry-run by default.** Live blocking/killing/quarantine is opt-in (`--respond-live`) and guarded against self-destructive targets (loopback/private IPs, init/own PID, symlinks and protected system paths).
 
-See [`docs/deployment-learniam.md`](docs/deployment-learniam.md) for VPS notes.
+See [`docs/deployment.md`](docs/deployment.md) for VPS notes.
 
 ## License
 

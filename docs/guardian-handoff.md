@@ -138,7 +138,7 @@ python3 -m guardian.cli serve
 5. **Optional:** `ABUSEIPDB_API_KEY`, `NVD_API_KEY`, `ABUSE_CH_AUTH_KEY` for cross-verify enrichers
 6. **Local alerts** (logs/network) use Phi-3 SLM — wording can hallucinate; global feeds do not
 7. **scapy** not installed — network monitor disabled; install + sudo for local network alerts
-8. **Landing page** at `learniam.online` apex — not built yet (dashboard is `guardian.learniam.online`)
+8. **Deployment:** see `docs/deployment.md` for local and VPS setup
 
 ### Recently added
 
