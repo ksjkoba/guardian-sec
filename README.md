@@ -97,7 +97,7 @@ Settings are saved to `~/.guardian/settings.json` (editable from the dashboard's
 ## Development
 
 ```bash
-pip install -e ".[web]" pytest pyflakes
+pip install -e ".[web]" pytest pyflakes httpx2   # httpx2 backs starlette's TestClient
 pytest -q                 # run the test suite (246 tests)
 pyflakes guardian/        # lint
 ```

@@ -39,7 +39,8 @@ jobs:
           # and raw-network (scapy) extras are intentionally omitted: the suite
           # exercises graceful-degradation paths when they are absent.
           pip install -e ".[web]"
-          pip install pytest pyflakes
+          # httpx2 is required by starlette's TestClient (used in test_web_server).
+          pip install pytest pyflakes httpx2
 
       - name: Lint (pyflakes — no undefined names)
         run: |
