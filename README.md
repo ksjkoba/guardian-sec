@@ -90,6 +90,8 @@ Settings are saved to `~/.guardian/settings.json` (editable from the dashboard's
 | Variable | Purpose |
 |----------|---------|
 | `GUARDIAN_DATA_DIR` | Where Guardian stores its DB, vault, and keys (default `~/.guardian`) |
+| `GUARDIAN_DASHBOARD_PASSWORD` | Require a login password for the dashboard (enables real access control) |
+| `GUARDIAN_DASHBOARD_PASSWORD_HASH` | sha256-hex of the password (preferred over plaintext) |
 | `GUARDIAN_TLS_AUTO` | Enable self-signed HTTPS |
 | `GUARDIAN_BREACH_PROVIDER` | Breach-lookup backend (`auto`, `mock`, …) |
 | `GUARDIAN_INSECURE_SSL` | Allow insecure SSL for corporate proxies |
@@ -130,8 +132,9 @@ docs/               # handoff + deployment notes
 Guardian is designed **local-first** — a personal SOC dashboard bound to `127.0.0.1`.
 
 - **Run it on loopback** (`--host 127.0.0.1`, the default) for single-machine use.
-- **API auth** (E2E session handshake) is on by default but requires the `cryptography` package (installed via the `web`/`full` extras). If it is missing, the server warns loudly at startup that the API is unauthenticated.
-- **Exposing the dashboard to a network or the internet is not recommended without a hardened front end.** Put it behind a reverse proxy that terminates TLS and enforces authentication (basic auth, mTLS, or SSO). The built-in session handshake provides end-to-end payload encryption, **not** access control — anyone who can reach a public dashboard can complete the handshake.
+- **Dashboard login (access control):** set `GUARDIAN_DASHBOARD_PASSWORD` (or `GUARDIAN_DASHBOARD_PASSWORD_HASH`) to require a password before the dashboard issues a session or serves any API route. This is real authentication — the password gate runs in front of the E2E handshake and the WebSocket. When no password is set (the local-use default), there is no login prompt. Guardian warns loudly at startup if you bind to a non-loopback interface without a password.
+- **API payload encryption** (E2E session handshake) requires the `cryptography` package (installed via the `web`/`full` extras). If it is missing, the server warns loudly at startup. Note the handshake provides end-to-end *payload encryption*, not access control — use the dashboard password (above) for access control.
+- **For internet-facing deployments**, still put Guardian behind a reverse proxy that terminates TLS (and optionally adds its own auth layer) in addition to the dashboard password.
 - **Active response is dry-run by default.** Live blocking/killing/quarantine is opt-in (`--respond-live`) and guarded against self-destructive targets (loopback/private IPs, init/own PID, symlinks and protected system paths).
 
 See [`docs/deployment.md`](docs/deployment.md) for VPS notes.
