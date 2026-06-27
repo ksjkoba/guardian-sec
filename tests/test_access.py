@@ -106,6 +106,38 @@ def gated_client(monkeypatch, tmp_path):
         yield tc
 
 
+@pytest.fixture
+def fully_gated_client(monkeypatch, tmp_path):
+    """A realistic shared deployment: BOTH API session auth AND a password on."""
+    monkeypatch.delenv("GUARDIAN_API_AUTH", raising=False)  # default = on (crypto present)
+    monkeypatch.delenv("GUARDIAN_ALLOW_PLAINTEXT", raising=False)
+    monkeypatch.setenv("GUARDIAN_DATA_DIR", str(tmp_path / "guardian"))
+    monkeypatch.setenv("GUARDIAN_DASHBOARD_PASSWORD", "letmein")
+    import guardian.web.persistence as persist
+    persist._initialized = False
+    app = create_app(dashboard_state=DashboardState())
+    with TestClient(app) as tc:
+        yield tc
+
+
+def test_login_reachable_with_api_auth_and_password(fully_gated_client):
+    """Regression: login must work when both API auth and a password are set.
+
+    Previously /api/security/login was blocked by the session-auth gate, so a
+    shared deployment (auth + password) could never obtain an access token —
+    a login deadlock.
+    """
+    c = fully_gated_client
+    # Wrong password is rejected by the login endpoint itself (not the session gate).
+    bad = c.post("/api/security/login", json={"password": "nope"})
+    assert bad.status_code == 401
+    assert "session" not in bad.json().get("error", "").lower()
+    # Correct password yields an access token.
+    good = c.post("/api/security/login", json={"password": "letmein"})
+    assert good.status_code == 200
+    assert good.json().get("access_token")
+
+
 def test_status_reports_login_required(gated_client):
     r = gated_client.get("/api/security/status")
     assert r.status_code == 200
