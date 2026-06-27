@@ -20,7 +20,9 @@ jobs:
       - name: Approve and enable auto-merge (patch & minor only)
         if: steps.meta.outputs.update-type == 'version-update:semver-patch' || steps.meta.outputs.update-type == 'version-update:semver-minor'
         run: |
-          gh pr review --approve "$PR_URL"
+          # Approval is best-effort: branch protection requires 0 approvals,
+          # so enabling auto-merge alone is sufficient even if approve is denied.
+          gh pr review --approve "$PR_URL" || echo "Approval skipped (not permitted) — continuing."
           gh pr merge --auto --squash "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
