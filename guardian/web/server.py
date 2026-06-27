@@ -887,14 +887,23 @@ def _websocket_ready(host: str, port: int) -> bool:
 
 
 def wait_for_server_ready(host: str = "127.0.0.1", port: int = 8765,
-                          timeout: float = 15.0) -> bool:
-    """Return True once the HTTP(S) API responds on /api/stats."""
+                          timeout: float = 30.0) -> bool:
+    """Return True once the HTTP(S) API is responding.
+
+    Probes /api/security/status, which is always public (it is part of the
+    pre-login bootstrap). We treat ANY HTTP response — including 401/403 from a
+    gated route — as "the server is up", because a configured dashboard password
+    makes most /api/* routes return 401 before they ever run. Only connection
+    errors mean "not ready yet".
+    """
     import ssl
     import urllib.error
     import urllib.request
 
+    # 0.0.0.0 isn't a connectable address — probe loopback instead.
+    probe_host = "127.0.0.1" if host in ("0.0.0.0", "::") else host
     scheme = "https" if tls_enabled() else "http"
-    url = f"{scheme}://{host}:{port}/api/stats"
+    url = f"{scheme}://{probe_host}:{port}/api/security/status"
     ctx = None
     if scheme == "https":
         ctx = ssl.create_default_context()
@@ -904,8 +913,11 @@ def wait_for_server_ready(host: str = "127.0.0.1", port: int = 8765,
     while time.time() < deadline:
         try:
             with urllib.request.urlopen(url, timeout=1.5, context=ctx) as resp:
-                if resp.status == 200:
+                if resp.status:
                     return True
+        except urllib.error.HTTPError:
+            # The server answered (e.g. 401/404/500) — it's up.
+            return True
         except (urllib.error.URLError, OSError, TimeoutError):
             pass
         time.sleep(0.3)

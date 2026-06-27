@@ -9,11 +9,16 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from guardian.security.session import SessionManager
 
-# Paths reachable without a session token (bootstrap + handshake)
+# Paths reachable without a session token (bootstrap + handshake + login).
+# The login/logout endpoints must be reachable before a session exists,
+# otherwise a dashboard with both API auth and a password set would deadlock
+# (you can't log in to obtain the access token needed to handshake).
 _PUBLIC_BASE = frozenset({
     "/api/stats",
     "/api/security/status",
     "/api/security/handshake",
+    "/api/security/login",
+    "/api/security/logout",
 })
 
 # Back-compat alias (local dev); prefer public_api_paths(client_host) in middleware.
