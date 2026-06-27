@@ -184,6 +184,43 @@ def test_stats_counts_campaigns(client):
     assert data["total_campaigns"] == 1
 
 
+# ─── /api/queue ──────────────────────────────────────────────────────────────
+
+def test_queue_idle_when_no_analysis(client):
+    """Before any analysis is submitted, the queue reports an idle/inactive state."""
+    import guardian.engine.analysis_queue as aq
+
+    aq.reset_analysis_queue()
+    c, _ = client
+    r = c.get("/api/queue")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["active"] is False
+    assert data["pending"] == 0
+    assert data["dropped"] == 0
+    aq.reset_analysis_queue()
+
+
+def test_queue_reports_activity(client):
+    """Once jobs are submitted, the endpoint reflects processed counts."""
+    import threading
+    import guardian.engine.analysis_queue as aq
+
+    aq.reset_analysis_queue()
+    done = threading.Event()
+    aq.submit_analysis(lambda: done.set())
+    assert done.wait(timeout=2.0)
+
+    c, _ = client
+    r = c.get("/api/queue")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["active"] is True
+    assert data["submitted"] >= 1
+    assert data["processed"] >= 1
+    aq.reset_analysis_queue()
+
+
 # ─── /api/ioc/check ──────────────────────────────────────────────────────────
 
 def test_ioc_check_missing_value(client):

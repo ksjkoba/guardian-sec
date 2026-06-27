@@ -308,6 +308,11 @@ def create_app(dashboard_state: "DashboardState | None" = None) -> "FastAPI":
     async def get_stats() -> "JSONResponse":
         return JSONResponse(ds.get_stats())
 
+    @app.get("/api/queue")
+    async def get_queue() -> "JSONResponse":
+        from guardian.engine.analysis_queue import queue_stats
+        return JSONResponse(queue_stats())
+
     @app.get("/api/settings")
     async def get_settings() -> "JSONResponse":
         from guardian.web.settings import effective_settings
