@@ -134,4 +134,4 @@ docs/               # handoff + deployment notes
 
 ## License
 
-MIT (see `license` in `pyproject.toml`). A standalone `LICENSE` file has not yet been added.
+MIT — see [`LICENSE`](LICENSE).
