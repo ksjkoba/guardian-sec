@@ -1,0 +1,12 @@
+# Code owners for Guardian / Sec.
+# These users are requested for review automatically on matching paths.
+# Docs: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner for everything in the repo.
+*       @ksjkoba
+
+# Security-sensitive areas (crypto, auth, sessions, vault, keys, TLS).
+/guardian/security/     @ksjkoba
+
+# CI / repo tooling.
+/.github/               @ksjkoba
