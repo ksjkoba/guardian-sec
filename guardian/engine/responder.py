@@ -127,8 +127,54 @@ def _audit(result: ResponseResult) -> None:
 
 # ─── Process killer ──────────────────────────────────────────────────────────
 
+# PIDs at or below this are init/kernel threads that must never be killed.
+# (PID 1 = init/systemd; killing it panics the host.)
+MIN_KILLABLE_PID = 2
+
+
+def killable_pid_reason(pid: int) -> str | None:
+    """Return a refusal reason if `pid` is unsafe to kill, else None.
+
+    Refuses non-positive PIDs (0 signals the caller's whole process group and
+    negatives signal arbitrary process groups), init/early kernel PIDs, and
+    Guardian's own process and parent — all of which would be self-destructive.
+    """
+    if not isinstance(pid, int):
+        return "PID is not an integer"
+    if pid <= 0:
+        return f"non-positive PID {pid} (would signal a process group, not one process)"
+    if pid < MIN_KILLABLE_PID:
+        return f"PID {pid} is init/kernel (protected)"
+    if pid == os.getpid():
+        return "refusing to kill Guardian itself"
+    try:
+        if pid == os.getppid():
+            return "refusing to kill Guardian's parent process"
+    except OSError:
+        pass
+    return None
+
+
+def is_killable_pid(pid: int) -> bool:
+    return killable_pid_reason(pid) is None
+
+
 def kill_process(pid: int, dry_run: bool = DRY_RUN_DEFAULT) -> ResponseResult:
     target = str(pid)
+
+    # Defense in depth: refuse unsafe PIDs even on a direct call.
+    reason = killable_pid_reason(pid)
+    if reason is not None:
+        result = ResponseResult(
+            action=ResponseAction.KILL_PROCESS,
+            target=target,
+            success=False,
+            dry_run=dry_run,
+            message=f"Refused to kill PID {pid}: {reason}",
+        )
+        _audit(result)
+        return result
+
     if dry_run:
         result = ResponseResult(
             action=ResponseAction.KILL_PROCESS,
@@ -416,9 +462,14 @@ class AutoResponder:
         # Kill suspicious process
         pid = alert.metadata.get("pid")
         if pid and alert.module == "file_monitor":
-            r = kill_process(int(pid), dry_run=self.dry_run)
-            r.alert_id = alert.id
-            results.append(r)
+            try:
+                pid_int = int(pid)
+            except (TypeError, ValueError):
+                pid_int = None
+            if pid_int is not None:
+                r = kill_process(pid_int, dry_run=self.dry_run)
+                r.alert_id = alert.id
+                results.append(r)
 
         # Block source IP from network alerts
         if alert.module == "network_monitor":

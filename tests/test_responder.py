@@ -8,6 +8,7 @@ from guardian.engine.responder import (
     block_ip,
     quarantine_file,
     is_blockable_ip,
+    is_killable_pid,
     AutoResponder,
     ResponseAction,
     MAX_CAMPAIGN_BLOCKS,
@@ -31,6 +32,69 @@ def test_kill_process_dry_run():
     assert result.action == ResponseAction.KILL_PROCESS
     assert result.success is True
     assert "DRY RUN" in result.message
+
+
+# ─── PID safety guard ─────────────────────────────────────────────────────────
+
+@pytest.mark.parametrize("pid", [9999, 4321, 100000])
+def test_is_killable_normal_pids(pid):
+    # (Assumes these aren't our own pid/ppid, which is overwhelmingly safe.)
+    import os
+    if pid in (os.getpid(), os.getppid()):
+        pytest.skip("collides with test runner pid")
+    assert is_killable_pid(pid) is True
+
+
+@pytest.mark.parametrize("pid", [1, 0, -1, -1234, 2 - 2])
+def test_is_not_killable_unsafe_pids(pid):
+    # PID 1 (init), 0 / negatives (process groups). MIN_KILLABLE_PID is 2.
+    assert is_killable_pid(pid) is False
+
+
+def test_kill_process_refuses_init():
+    result = kill_process(1, dry_run=False)
+    assert result.success is False
+    assert "Refused" in result.message
+    # Dry run should also refuse (nothing to simulate for a protected PID).
+    assert kill_process(1, dry_run=True).success is False
+
+
+def test_kill_process_refuses_zero_and_negative():
+    assert kill_process(0, dry_run=True).success is False
+    assert kill_process(-1, dry_run=True).success is False
+
+
+def test_kill_process_refuses_self():
+    import os
+    result = kill_process(os.getpid(), dry_run=False)
+    assert result.success is False
+    assert "itself" in result.message.lower()
+
+
+def test_auto_responder_refuses_init_pid():
+    responder = AutoResponder(dry_run=True)
+    alert = _make_alert(
+        module="file_monitor",
+        severity=Severity.CRITICAL,
+        metadata={"pid": 1},
+    )
+    results = responder.respond_to_alert(alert)
+    kills = [r for r in results if r.action == ResponseAction.KILL_PROCESS]
+    assert len(kills) == 1
+    assert kills[0].success is False  # refused, not executed
+
+
+def test_auto_responder_handles_non_numeric_pid():
+    """A garbage pid in metadata must not crash the response loop."""
+    responder = AutoResponder(dry_run=True)
+    alert = _make_alert(
+        module="file_monitor",
+        severity=Severity.CRITICAL,
+        metadata={"pid": "not-a-number"},
+    )
+    # Should simply skip the kill action without raising.
+    results = responder.respond_to_alert(alert)
+    assert all(r.action != ResponseAction.KILL_PROCESS for r in results)
 
 
 def test_block_ip_dry_run():
