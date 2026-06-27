@@ -2579,16 +2579,29 @@ function setAccessToken(tok) {
   else sessionStorage.removeItem('guardian_access');
 }
 
+// Returns { ok: true } on success, or { ok: false, error } with a message
+// (e.g. a lockout notice) suitable for display on the login screen.
 async function doLogin(password) {
-  const r = await fetch('/api/security/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ password }),
-  });
-  if (!r.ok) return false;
-  const d = await r.json();
-  if (d.access_token) setAccessToken(d.access_token);
-  return true;
+  let r;
+  try {
+    r = await fetch('/api/security/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
+    });
+  } catch (e) {
+    return { ok: false, error: 'Network error — is the server reachable?' };
+  }
+  let d = null;
+  try { d = await r.json(); } catch (e) { /* no body */ }
+  if (r.ok) {
+    if (d && d.access_token) setAccessToken(d.access_token);
+    return { ok: true };
+  }
+  const error = (d && d.error) || (r.status === 429
+    ? 'Too many attempts — please wait and try again.'
+    : 'Incorrect password. Try again.');
+  return { ok: false, error };
 }
 
 // Returns true once the dashboard is unlocked (logged in, or login not required).
@@ -2630,12 +2643,12 @@ function showLoginScreen(errorMsg) {
     form.onsubmit = async (e) => {
       e.preventDefault();
       errEl.textContent = '';
-      const ok = await doLogin(pwEl.value);
-      if (ok) {
+      const res = await doLogin(pwEl.value);
+      if (res.ok) {
         overlay.remove();
         resolve(true);
       } else {
-        errEl.textContent = 'Incorrect password. Try again.';
+        errEl.textContent = res.error || 'Incorrect password. Try again.';
         pwEl.value = '';
         pwEl.focus();
       }

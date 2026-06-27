@@ -49,6 +49,17 @@ When a password is set, browsers must log in before the dashboard issues a
 session or serves any API route (the WebSocket is gated too). Sessions last
 `GUARDIAN_ACCESS_TTL` seconds (default 24h).
 
+**Brute-force protection.** After `GUARDIAN_LOGIN_MAX_FAILURES` failed attempts
+(default 5) a client is locked out for `GUARDIAN_LOGIN_LOCKOUT_SECS` (default
+300s). Loopback is exempt unless you set `GUARDIAN_LOGIN_THROTTLE_LOCAL=1`.
+
+**Audit log.** Every login success, failure, lockout, and logout is appended to
+`<data_dir>/audit.log` as JSONL (mode `0600`). Review it to spot probing:
+
+```bash
+tail -f ~/.guardian/audit.log
+```
+
 ### Option A — Nginx reverse proxy (recommended)
 
 Run Guardian bound to localhost and let nginx serve HTTPS on 443.
