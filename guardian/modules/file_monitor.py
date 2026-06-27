@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Callable
 
 from guardian.engine.alert import Alert
+from guardian.engine.analysis_queue import submit_analysis
 from guardian.engine.slm import get_engine
 
 MODULE = "file_monitor"
@@ -116,6 +117,9 @@ class FileIntegrityMonitor:
         self.interval = interval
         self._stop = threading.Event()
         self._baseline: dict[str, str] = {}
+        # Live mode (start()) offloads inference to the shared worker queue so
+        # the scan loop never blocks. Direct/one-shot use stays synchronous.
+        self._async_analysis = False
 
     def build_baseline(self) -> None:
         for path in self.paths:
@@ -127,6 +131,7 @@ class FileIntegrityMonitor:
                         self._baseline[str(f)] = _sha256(f)
 
     def start(self) -> None:
+        self._async_analysis = True
         self.build_baseline()
         t = threading.Thread(target=self._watch_loop, daemon=True)
         t.start()
@@ -172,6 +177,14 @@ class FileIntegrityMonitor:
                 del self._baseline[fpath]
 
     def _analyze_file_event(self, path: Path, event: str, details: str) -> None:
+        # In live mode, offload the (slow, CPU-heavy) SLM inference to the shared
+        # worker queue so the scan loop never blocks. One-shot use runs inline.
+        if self._async_analysis:
+            submit_analysis(lambda: self._run_file_analysis(path, event, details))
+        else:
+            self._run_file_analysis(path, event, details)
+
+    def _run_file_analysis(self, path: Path, event: str, details: str) -> None:
         try:
             engine = get_engine()
             raw = engine.analyze(_build_file_prompt(path, event, details), max_tokens=256)
@@ -193,8 +206,12 @@ class ProcessMonitor:
         self.interval = interval
         self._stop = threading.Event()
         self._seen_pids: set[int] = set()
+        # Live mode (start()) offloads inference to the shared worker queue.
+        # One-shot scans (scan_processes_once) stay synchronous.
+        self._async_analysis = False
 
     def start(self) -> None:
+        self._async_analysis = True
         t = threading.Thread(target=self._loop, daemon=True)
         t.start()
 
@@ -230,6 +247,14 @@ class ProcessMonitor:
                 pass
 
     def _analyze_process(self, pid: int, cmdline: str, user: str) -> None:
+        # In live mode, offload to the shared worker queue so the process-scan
+        # loop never blocks on inference. One-shot scans run inline.
+        if self._async_analysis:
+            submit_analysis(lambda: self._run_process_analysis(pid, cmdline, user))
+        else:
+            self._run_process_analysis(pid, cmdline, user)
+
+    def _run_process_analysis(self, pid: int, cmdline: str, user: str) -> None:
         try:
             engine = get_engine()
             raw = engine.analyze(_build_proc_prompt(pid, cmdline, user), max_tokens=256)
