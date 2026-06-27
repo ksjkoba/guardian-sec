@@ -100,10 +100,12 @@ class SessionManager:
         }
 
     def _get(self, session_id: str, token: str) -> bytes:
+        import secrets as _secrets
+
         with self._lock:
             self._purge_expired()
             session = self._sessions.get(session_id)
-            if session is None or session["token"] != token:
+            if session is None or not _secrets.compare_digest(session["token"], token):
                 raise PermissionError("invalid or expired session")
             if session["expires"] <= time.time():
                 self._sessions.pop(session_id, None)

@@ -1112,6 +1112,7 @@ def serve(
 
     _prepare_engine_lazy(model)
     _init_ti(no_ti=no_ti, force_refresh=refresh_feeds)
+    _warn_if_auth_unenforceable(host)
 
     # Set up dashboard state
     _web_state = state
@@ -1206,6 +1207,47 @@ def serve(
 
 
 # ─── helpers ─────────────────────────────────────────────────────────────────
+
+def _warn_if_auth_unenforceable(host: str) -> None:
+    """Fail loud if the dashboard will be served without enforceable auth.
+
+    GUARDIAN_API_AUTH defaults to on, but auth requires the `cryptography`
+    package; without it the API silently serves unauthenticated. Warn clearly,
+    and warn harder when binding to a non-loopback interface.
+    """
+    auth_requested = os.environ.get("GUARDIAN_API_AUTH", "1").lower() not in ("0", "false", "no")
+    try:
+        from guardian.security.crypto import has_crypto
+        crypto_ok = has_crypto()
+    except ImportError:
+        crypto_ok = False
+
+    non_loopback = host not in ("127.0.0.1", "::1", "localhost")
+
+    if auth_requested and not crypto_ok:
+        console.print(
+            "[bold red]WARNING:[/bold red] API auth is requested "
+            "(GUARDIAN_API_AUTH=1) but the 'cryptography' package is not "
+            "installed — [bold]the dashboard API will be served WITHOUT "
+            "authentication.[/bold]"
+        )
+        console.print(
+            "[yellow]Install it with: pip install \"guardian-sec[web]\" "
+            "(or pip install cryptography)[/yellow]"
+        )
+        if non_loopback:
+            console.print(
+                f"[bold red]You are binding to {host} (non-loopback) with no "
+                "auth. Anyone who can reach this host can read alerts and call "
+                "the API. Bind to 127.0.0.1 or install cryptography first.[/bold red]"
+            )
+    elif non_loopback and not os.environ.get("GUARDIAN_TLS_CERT") and not os.environ.get("GUARDIAN_TLS_AUTO"):
+        console.print(
+            f"[yellow]Note: binding to {host} without TLS. Put the dashboard "
+            "behind a reverse proxy (HTTPS) or set GUARDIAN_TLS_AUTO=1 for a "
+            "non-local deployment.[/yellow]"
+        )
+
 
 def _prepare_engine_lazy(model: Optional[str]) -> None:
     """Register the SLM model path without loading the 2.4 GB model into RAM.

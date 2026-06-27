@@ -6,13 +6,17 @@ build-backend = "setuptools.build_meta"
 name = "guardian-sec"
 version = "0.1.0"
 description = "SLM-powered local cybersecurity defense system"
+readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
+authors = [{ name = "Kshitish Jha" }]
 keywords = ["cybersecurity", "security", "llm", "slm", "phi3", "defense"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Information Technology",
     "Topic :: Security",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -24,6 +28,11 @@ dependencies = [
     "psutil>=5.9",
 ]
 
+[project.urls]
+Homepage = "https://github.com/ksjkoba/guardian-sec"
+Repository = "https://github.com/ksjkoba/guardian-sec"
+Issues = "https://github.com/ksjkoba/guardian-sec/issues"
+
 [project.optional-dependencies]
 full = [
     "llama-cpp-python>=0.2.57",
@@ -31,6 +40,7 @@ full = [
     "fastapi>=0.111",
     "uvicorn[standard]>=0.29",
     "cryptography>=42.0",
+    "python-multipart>=0.0.9",
 ]
 network = ["scapy>=2.5"]
 slm = ["llama-cpp-python>=0.2.57"]
@@ -44,4 +54,4 @@ where = ["."]
 include = ["guardian*"]
 
 [tool.setuptools.package-data]
-guardian = ["py.typed"]
+guardian = ["py.typed", "web/static/*"]
