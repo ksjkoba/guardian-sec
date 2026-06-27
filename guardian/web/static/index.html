@@ -2567,6 +2567,93 @@ let securitySession = null;
 let securityAesKey = null;
 let securityReady = false;
 
+// ── Access control (dashboard password gate) ───────────────────────────────
+// When the operator sets a dashboard password, the server requires a valid
+// access token (obtained via /api/security/login) before issuing an E2E session
+// or serving any /api/* route. Persisted per-tab so a refresh doesn't re-prompt.
+let accessToken = sessionStorage.getItem('guardian_access') || '';
+
+function setAccessToken(tok) {
+  accessToken = tok || '';
+  if (accessToken) sessionStorage.setItem('guardian_access', accessToken);
+  else sessionStorage.removeItem('guardian_access');
+}
+
+async function doLogin(password) {
+  const r = await fetch('/api/security/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password }),
+  });
+  if (!r.ok) return false;
+  const d = await r.json();
+  if (d.access_token) setAccessToken(d.access_token);
+  return true;
+}
+
+// Returns true once the dashboard is unlocked (logged in, or login not required).
+async function ensureAccess() {
+  let status;
+  try {
+    status = await (await fetch('/api/security/status')).json();
+  } catch (e) {
+    return true; // status unreachable — let normal flow surface the error
+  }
+  if (!status.login_required) return true;
+  if (accessToken) return true;  // optimistic; a 401 later re-triggers the gate
+  return await showLoginScreen();
+}
+
+function showLoginScreen(errorMsg) {
+  return new Promise((resolve) => {
+    let overlay = document.getElementById('login-overlay');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'login-overlay';
+      overlay.style.cssText = 'position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;background:rgba(8,10,16,0.96);backdrop-filter:blur(6px);';
+      overlay.innerHTML = `
+        <form id="login-form" style="background:var(--panel,#12151c);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:32px;width:340px;max-width:90vw;box-shadow:0 20px 60px rgba(0,0,0,0.5);">
+          <h2 style="margin:0 0 6px;font-size:1.25rem;color:var(--text,#e8eaf0)">Guardian</h2>
+          <p style="margin:0 0 18px;font-size:0.85rem;color:var(--muted,#8a90a0)">This dashboard is password-protected.</p>
+          <input id="login-password" type="password" autocomplete="current-password" placeholder="Dashboard password" autofocus
+                 style="width:100%;box-sizing:border-box;padding:11px 13px;border-radius:9px;border:1px solid rgba(255,255,255,0.12);background:#0b0e14;color:#e8eaf0;font-size:0.95rem;" />
+          <div id="login-error" style="min-height:18px;margin:8px 2px 0;font-size:0.8rem;color:#ff6b6b;"></div>
+          <button type="submit" style="width:100%;margin-top:10px;padding:11px;border:0;border-radius:9px;background:var(--primary,#4f7cff);color:#fff;font-size:0.95rem;font-weight:600;cursor:pointer;">Unlock</button>
+        </form>`;
+      document.body.appendChild(overlay);
+    }
+    const form = overlay.querySelector('#login-form');
+    const errEl = overlay.querySelector('#login-error');
+    const pwEl = overlay.querySelector('#login-password');
+    errEl.textContent = errorMsg || '';
+    pwEl.focus();
+    form.onsubmit = async (e) => {
+      e.preventDefault();
+      errEl.textContent = '';
+      const ok = await doLogin(pwEl.value);
+      if (ok) {
+        overlay.remove();
+        resolve(true);
+      } else {
+        errEl.textContent = 'Incorrect password. Try again.';
+        pwEl.value = '';
+        pwEl.focus();
+      }
+    };
+  });
+}
+
+// Re-prompt for the password after a 401, then retry the original request once.
+let _reauthPromise = null;
+async function handleAuthFailure() {
+  setAccessToken('');
+  if (!_reauthPromise) {
+    _reauthPromise = showLoginScreen('Session expired — please log in again.')
+      .finally(() => { _reauthPromise = null; });
+  }
+  return _reauthPromise;
+}
+
 function b64urlEncode(buf) {
   const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
   let s = btoa(String.fromCharCode.apply(null, bytes));
@@ -2604,7 +2691,7 @@ async function initSecurity() {
   try {
     const kp = await crypto.subtle.generateKey({ name: 'X25519' }, true, ['deriveBits']);
     const clientPubRaw = await crypto.subtle.exportKey('raw', kp.publicKey);
-    const r = await fetch('/api/security/handshake', {
+    const r = await secureFetch('/api/security/handshake', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ client_public_key: b64urlEncode(clientPubRaw) }),
@@ -2634,13 +2721,26 @@ async function encryptSensitivePayload(obj) {
 function secureHeaders(extra = {}) {
   const h = { ...extra };
   if (securitySession?.token) h['X-Guardian-Session'] = securitySession.token;
+  if (accessToken) h['X-Guardian-Access'] = accessToken;
   return h;
 }
 
 async function secureFetch(url, options = {}) {
   const opts = { ...options };
   opts.headers = secureHeaders(opts.headers || {});
-  return fetch(url, opts);
+  let r = await fetch(url, opts);
+  // If the access gate rejects us (expired/invalid token), re-prompt and retry
+  // the request once with the fresh token.
+  if (r.status === 401) {
+    let body = null;
+    try { body = await r.clone().json(); } catch (e) { /* not JSON */ }
+    if (body && body.login_required) {
+      await handleAuthFailure();
+      opts.headers = secureHeaders(options.headers || {});
+      r = await fetch(url, opts);
+    }
+  }
+  return r;
 }
 
 async function securePost(url, payload) {
@@ -2693,8 +2793,11 @@ function stopRestPoll() {
 // ── WebSocket connection ──────────────────────────────────────────────────────
 function connect() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  const tok = securitySession?.token ? `?token=${encodeURIComponent(securitySession.token)}` : '';
-  ws = new WebSocket(`${proto}://${location.host}/ws${tok}`);
+  const params = new URLSearchParams();
+  if (securitySession?.token) params.set('token', securitySession.token);
+  if (accessToken) params.set('access', accessToken);
+  const qs = params.toString();
+  ws = new WebSocket(`${proto}://${location.host}/ws${qs ? '?' + qs : ''}`);
 
   ws.onopen = () => {
     setConnected(true);
@@ -3948,6 +4051,7 @@ document.getElementById('settings-export-btn')?.addEventListener('click', export
 
 // ── Init (secure session required before any API call) ───────────────────────
 async function boot() {
+  await ensureAccess();
   await initSecurity();
   loadBreachScenarios();
   loadWatchlist();

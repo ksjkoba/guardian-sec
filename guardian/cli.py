@@ -1248,6 +1248,28 @@ def _warn_if_auth_unenforceable(host: str) -> None:
             "non-local deployment.[/yellow]"
         )
 
+    # Access control: a network-exposed dashboard with no password lets anyone
+    # who can reach it read alerts and drive the API.
+    try:
+        from guardian.security.access import login_required
+        has_password = login_required()
+    except ImportError:
+        has_password = False
+
+    if non_loopback and not has_password:
+        console.print(
+            f"[bold red]WARNING:[/bold red] binding to {host} (non-loopback) with "
+            "[bold]no dashboard password[/bold] — anyone who can reach this host "
+            "can use the dashboard."
+        )
+        console.print(
+            "[yellow]Set GUARDIAN_DASHBOARD_PASSWORD (or "
+            "GUARDIAN_DASHBOARD_PASSWORD_HASH) to require login, and/or front it "
+            "with an authenticating TLS proxy.[/yellow]"
+        )
+    elif has_password:
+        console.print("[dim]Dashboard login required (password configured).[/dim]")
+
 
 def _prepare_engine_lazy(model: Optional[str]) -> None:
     """Register the SLM model path without loading the 2.4 GB model into RAM.

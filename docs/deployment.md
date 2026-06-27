@@ -27,10 +27,27 @@ GUARDIAN_DEPLOY_MODE=local
 
 ## Server / VPS (public)
 
-> **Important:** Guardian's built-in session handshake provides end-to-end
-> payload encryption, **not** access control. Anyone who can reach a public
-> dashboard can use it. Put it behind a reverse proxy that terminates TLS and
-> enforces authentication (basic auth, mTLS, or SSO).
+> **Important:** Set a dashboard password for any network-exposed deployment.
+> Guardian's built-in session handshake provides end-to-end *payload
+> encryption*, not access control. Setting `GUARDIAN_DASHBOARD_PASSWORD` (or
+> `GUARDIAN_DASHBOARD_PASSWORD_HASH`) enables a real login gate in front of the
+> dashboard. For internet-facing deployments, also put it behind a reverse
+> proxy that terminates TLS (and optionally adds its own auth layer).
+
+### Dashboard password
+
+```bash
+# Simplest:
+export GUARDIAN_DASHBOARD_PASSWORD='a-long-passphrase'
+
+# Preferred — keep the plaintext out of the environment:
+python -c "import hashlib,getpass; print(hashlib.sha256(getpass.getpass().encode()).hexdigest())"
+export GUARDIAN_DASHBOARD_PASSWORD_HASH='<the-hash-above>'
+```
+
+When a password is set, browsers must log in before the dashboard issues a
+session or serves any API route (the WebSocket is gated too). Sessions last
+`GUARDIAN_ACCESS_TTL` seconds (default 24h).
 
 ### Option A — Nginx reverse proxy (recommended)
 
@@ -121,10 +138,11 @@ Rate limiting (VPS mode): set `GUARDIAN_RATE_LIMIT=120` (requests/min per IP).
 
 | Control | Recommended value |
 |---------|-------------------|
+| `GUARDIAN_DASHBOARD_PASSWORD[_HASH]` | **Set a dashboard login password** (real access control) |
 | `GUARDIAN_BIND_HOST=127.0.0.1` | Don't expose Guardian directly; front it with nginx |
-| Reverse-proxy auth | basic auth / mTLS / SSO in front of the dashboard |
+| Reverse-proxy auth | optional extra layer (basic auth / mTLS / SSO) in front of the dashboard |
 | `GUARDIAN_DISABLE_TEST_ALERT=1` | Block `/api/test-alert` (no fake alert injection) |
-| `cryptography` installed | Enables API session auth + at-rest encryption |
+| `cryptography` installed | Enables E2E payload encryption + at-rest encryption |
 | TLS | Terminate HTTPS at the proxy (Option A) or in Guardian (Option B) |
 
 ---

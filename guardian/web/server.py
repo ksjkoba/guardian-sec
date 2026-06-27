@@ -212,6 +212,9 @@ def create_app(dashboard_state: "DashboardState | None" = None) -> "FastAPI":
         sessions = SessionManager()
     except ImportError:
         sessions = None  # type: ignore[assignment]
+
+    from guardian.security.access import AccessManager
+    access = AccessManager()
     # NOTE: the asyncio.Queue is intentionally NOT created here. Creating it at
     # factory-call time (main thread, no running loop) binds it to the wrong
     # loop when uvicorn runs in a background thread - the broadcaster then
@@ -254,15 +257,37 @@ def create_app(dashboard_state: "DashboardState | None" = None) -> "FastAPI":
 
     app = FastAPI(title="Guardian Dashboard", docs_url=None, redoc_url=None, lifespan=lifespan)
 
+    # Paths reachable before login so a client can discover the gate and submit
+    # credentials. Everything else under /api/* requires a valid access token
+    # when a dashboard password is configured.
+    _ACCESS_PUBLIC_PATHS = frozenset({
+        "/api/security/status",
+        "/api/security/login",
+    })
+
     @app.middleware("http")
     async def guardian_security_layer(request: "Request", call_next):  # type: ignore[no-untyped-def]
         from guardian.security.auth import api_auth_enabled, public_api_paths, verify_request_token
+        from guardian.security.access import login_required
         from guardian.web.ratelimit import allow_request
 
         path = request.url.path
         client = request.client.host if request.client else "unknown"
         if not allow_request(client):
             return JSONResponse({"error": "rate limit exceeded"}, status_code=429)
+
+        # Access-control gate (real authentication): when a dashboard password is
+        # configured, every /api/* route except the login/status bootstrap needs
+        # a valid access token. This runs BEFORE the handshake so no E2E session
+        # is ever issued to an unauthenticated client.
+        if login_required() and path.startswith("/api/") and path not in _ACCESS_PUBLIC_PATHS:
+            access_token = request.headers.get("X-Guardian-Access", "")
+            if not access.verify(access_token):
+                return JSONResponse(
+                    {"error": "login required", "login_required": True},
+                    status_code=401,
+                )
+
         if api_auth_enabled() and path.startswith("/api/") and path not in public_api_paths(client):
             token = request.headers.get("X-Guardian-Session", "")
             if sessions is None or not verify_request_token(sessions, token):
@@ -350,9 +375,11 @@ def create_app(dashboard_state: "DashboardState | None" = None) -> "FastAPI":
             out["master_key_path"] = str(key_file_path()) if has_crypto() else None
             out["tls_enabled"] = bool(os.environ.get("GUARDIAN_TLS_CERT") or os.environ.get("GUARDIAN_TLS_AUTO"))
             from guardian.security.auth import api_auth_enabled, require_e2e_default
+            from guardian.security.access import login_required
             from guardian.web.deploy import deployment_info
             out["api_auth"] = api_auth_enabled()
             out["require_e2e"] = require_e2e_default()
+            out["login_required"] = login_required()
             out["deployment"] = deployment_info()
             return JSONResponse(out)
         except Exception as e:
@@ -374,6 +401,26 @@ def create_app(dashboard_state: "DashboardState | None" = None) -> "FastAPI":
             return JSONResponse({"error": str(e)}, status_code=400)
         except ImportError as e:
             return JSONResponse({"error": str(e), "e2e_available": False}, status_code=503)
+
+    @app.post("/api/security/login")
+    async def security_login(body: dict) -> "JSONResponse":
+        """Exchange the dashboard password for a short-lived access token."""
+        from guardian.security.access import login_required, verify_password
+
+        if not login_required():
+            # No password configured — login is a no-op; the dashboard is open
+            # (loopback-only is the expected deployment for this case).
+            return JSONResponse({"ok": True, "login_required": False})
+        password = str((body or {}).get("password", ""))
+        if not verify_password(password):
+            return JSONResponse({"error": "invalid password"}, status_code=401)
+        token, expires = access.issue()
+        return JSONResponse({"ok": True, "access_token": token, "expires_at": expires})
+
+    @app.post("/api/security/logout")
+    async def security_logout(request: "Request") -> "JSONResponse":
+        access.revoke(request.headers.get("X-Guardian-Access", ""))
+        return JSONResponse({"ok": True})
 
     def _unwrap(body: dict, path: str, request: "Request") -> dict | "JSONResponse":
         if sessions is None:
@@ -708,6 +755,13 @@ def create_app(dashboard_state: "DashboardState | None" = None) -> "FastAPI":
     @app.websocket("/ws")
     async def websocket_endpoint(ws: "WebSocket") -> None:
         from guardian.security.auth import api_auth_enabled, verify_request_token
+        from guardian.security.access import login_required
+
+        # Access gate first: a network-exposed dashboard must not stream live
+        # alerts over /ws to an unauthenticated client.
+        if login_required() and not access.verify(ws.query_params.get("access", "")):
+            await ws.close(code=4401)
+            return
 
         if api_auth_enabled() and sessions is not None:
             token = ws.query_params.get("token", "")
