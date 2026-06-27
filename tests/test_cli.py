@@ -141,3 +141,96 @@ def test_campaigns_empty(runner):
     result = runner.invoke(cli, ["campaigns"])
     assert result.exit_code == 0, result.output
     assert "No active campaigns" in result.output
+
+
+# --- network-dependent commands (feeds mocked) -----------------------------
+
+class _FakeIndex:
+    """Minimal stand-in for the TI feed index used by check-ioc."""
+
+    total_iocs = 1234
+
+    def __init__(self, matches=None):
+        self._matches = matches or []
+
+    def lookup(self, value):
+        return self._matches
+
+
+def test_check_ioc_clean(runner, monkeypatch):
+    monkeypatch.setattr("guardian.intel.feeds.get_index", lambda **k: _FakeIndex())
+    monkeypatch.setattr("guardian.intel.heuristics.check_value", lambda v: None)
+
+    result = runner.invoke(cli, ["check-ioc", "8.8.8.8"])
+    assert result.exit_code == 0, result.output
+    assert "CLEAN" in result.output
+
+
+def test_check_ioc_malicious(runner, monkeypatch):
+    from guardian.intel.feeds import IOCMatch
+
+    match = IOCMatch(
+        ioc="1.2.3.4",
+        ioc_type="ip",
+        feed="ThreatFox",
+        malware_family="Cobalt Strike",
+        confidence=90,
+    )
+    monkeypatch.setattr("guardian.intel.feeds.get_index", lambda **k: _FakeIndex([match]))
+    monkeypatch.setattr("guardian.intel.heuristics.check_value", lambda v: None)
+
+    result = runner.invoke(cli, ["check-ioc", "1.2.3.4"])
+    assert result.exit_code == 0, result.output
+    assert "MALICIOUS" in result.output
+    assert "ThreatFox" in result.output
+
+
+def test_feed_status(runner, monkeypatch):
+    rows = [
+        {
+            "feed": "ThreatFox",
+            "ioc_type": "ip",
+            "cached": True,
+            "fresh": True,
+            "age_mins": 5,
+            "size_kb": 42,
+            "ttl_mins": 60,
+        }
+    ]
+    monkeypatch.setattr("guardian.intel.feeds.feed_status", lambda: rows)
+
+    result = runner.invoke(cli, ["feed-status"])
+    assert result.exit_code == 0, result.output
+    assert "ThreatFox" in result.output
+
+
+def test_cross_verify_requires_input(runner):
+    """With no --ioc/--all/--alert-id, the command should explain and exit non-zero."""
+    monkeypatch_msg = runner.invoke(cli, ["cross-verify"])
+    assert monkeypatch_msg.exit_code != 0
+    assert "Provide one of" in monkeypatch_msg.output
+
+
+def test_cross_verify_ioc(runner, monkeypatch):
+    class _FakeVerification:
+        def to_dict(self):
+            return {
+                "indicator": "http://example.com/bad",
+                "classification": "GENUINE",
+                "confidence": "high",
+                "rationale": "Listed on URLhaus.",
+                "corroboration_count": 2,
+                "checks": [],
+            }
+
+    monkeypatch.setattr(
+        "guardian.intel.cross_verify.key_status_message", lambda: None
+    )
+    monkeypatch.setattr(
+        "guardian.intel.cross_verify.verify_alert_dict",
+        lambda d: _FakeVerification(),
+    )
+
+    result = runner.invoke(cli, ["cross-verify", "--ioc", "http://example.com/bad"])
+    assert result.exit_code == 0, result.output
+    assert "GENUINE" in result.output
