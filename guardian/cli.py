@@ -1110,7 +1110,7 @@ def serve(
         console.print("[yellow]Run: pip install fastapi uvicorn[/yellow]")
         sys.exit(1)
 
-    _load_engine(model, required=False)
+    _prepare_engine_lazy(model)
     _init_ti(no_ti=no_ti, force_refresh=refresh_feeds)
 
     # Set up dashboard state
@@ -1206,6 +1206,37 @@ def serve(
 
 
 # ─── helpers ─────────────────────────────────────────────────────────────────
+
+def _prepare_engine_lazy(model: Optional[str]) -> None:
+    """Register the SLM model path without loading the 2.4 GB model into RAM.
+
+    `serve` uses this instead of `_load_engine` so the dashboard starts light
+    and fast. The model is loaded on demand by the first monitor or scan that
+    actually needs inference (every module calls `get_engine()` lazily).
+    """
+    from guardian.engine.slm import DEFAULT_MODEL_PATH, set_model_path
+
+    set_model_path(model)
+
+    path = Path(model) if model else DEFAULT_MODEL_PATH
+    try:
+        import llama_cpp  # noqa: F401
+    except ImportError:
+        console.print(
+            "[dim]Local SLM unavailable (llama-cpp-python not installed) — "
+            "dashboard, breach checks, and threat feeds still work.[/dim]"
+        )
+        return
+
+    if not path.exists():
+        console.print(
+            f"[yellow]Model not found at {path} — SLM analysis disabled.[/yellow]"
+        )
+        console.print("[yellow]Run: guardian download-model[/yellow]")
+        return
+
+    console.print("[dim]SLM ready (loads on first analysis).[/dim]")
+
 
 def _load_engine(model: Optional[str], *, required: bool = True) -> None:
     from guardian.engine.slm import get_engine

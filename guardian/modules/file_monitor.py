@@ -37,7 +37,25 @@ _SUSPICIOUS_PROC_PATTERNS = [
 ]
 
 
+# Files larger than this are not fully hashed every scan — doing so over
+# system temp dirs (e.g. /tmp, /var/tmp) pegs CPU and I/O. Instead we derive a
+# cheap change signature from size + mtime, which still detects modifications.
+_MAX_HASH_BYTES = 8 * 1024 * 1024  # 8 MB
+
+
 def _sha256(path: Path) -> str:
+    try:
+        size = path.stat().st_size
+    except OSError:
+        return ""
+    if size > _MAX_HASH_BYTES:
+        # Cheap signature for large files: size + mtime. Avoids reading GBs
+        # of temp/model files on every 2-second scan.
+        try:
+            mtime = path.stat().st_mtime_ns
+        except OSError:
+            return ""
+        return f"meta:{size}:{mtime}"
     h = hashlib.sha256()
     try:
         with open(path, "rb") as f:
@@ -91,7 +109,7 @@ class FileIntegrityMonitor:
         self,
         paths: list[str | Path],
         callback: Callable[[Alert], None],
-        interval: float = 2.0,
+        interval: float = 15.0,
     ):
         self.paths = [Path(p) for p in paths]
         self.callback = callback
