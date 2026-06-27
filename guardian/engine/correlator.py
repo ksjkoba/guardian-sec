@@ -56,6 +56,9 @@ class Campaign:
     synthesis: str = ""   # SLM-generated campaign summary
     severity: Severity = Severity.MEDIUM
     title: str = ""
+    # Alert count at the time SLM synthesis last ran — used to decide when a
+    # campaign has grown enough to warrant re-synthesis.
+    synthesized_alert_count: int = 0
 
     @property
     def duration_secs(self) -> float:
@@ -324,24 +327,27 @@ class Correlator:
             and len(campaign_to_return.alerts) >= CAMPAIGN_SLM_THRESHOLD
             and campaign_to_return.status == CampaignStatus.ACTIVE
         ):
-            threading.Thread(
-                target=self._synthesize,
-                args=(campaign_to_return,),
-                daemon=True,
-            ).start()
+            # Route through the shared bounded worker instead of spawning a
+            # thread per mature campaign, so campaign synthesis can't outrun the
+            # CPU cap (it shares the single SLM worker with the monitors).
+            from guardian.engine.analysis_queue import submit_analysis
+            submit_analysis(lambda: self._synthesize(campaign_to_return))
 
         if mature:
             return campaign_to_return
         return None
 
     def _synthesize(self, campaign: Campaign) -> None:
-        """Call SLM to produce a campaign narrative. Called in a background thread."""
-        # Snapshot alert count to avoid re-synthesizing every single new alert
-        snapshot_count = len(campaign.alerts)
+        """Call SLM to produce a campaign narrative. Runs on the analysis worker."""
+        # Re-synthesize an already-summarized campaign only once it has grown
+        # ~50% beyond the alert count present at the last synthesis. (Previously
+        # this compared len(alerts) against itself, so it always returned early
+        # and re-synthesis never happened.)
         if campaign.status == CampaignStatus.SYNTHESIZED:
-            # Re-synthesize only if significantly more alerts arrived
-            if snapshot_count < len(campaign.alerts) * 1.5:
+            if len(campaign.alerts) < campaign.synthesized_alert_count * 1.5:
                 return
+
+        count_at_synthesis = len(campaign.alerts)
 
         try:
             from guardian.engine.slm import get_engine
@@ -358,6 +364,7 @@ class Correlator:
 
             with self._lock:
                 _apply_synthesis_data(campaign, data)
+                campaign.synthesized_alert_count = count_at_synthesis
 
             if self._on_campaign:
                 self._on_campaign(campaign)
@@ -365,6 +372,7 @@ class Correlator:
         except Exception:
             with self._lock:
                 _apply_synthesis_data(campaign, _rule_based_synthesis(campaign))
+                campaign.synthesized_alert_count = count_at_synthesis
             if self._on_campaign:
                 self._on_campaign(campaign)
 
