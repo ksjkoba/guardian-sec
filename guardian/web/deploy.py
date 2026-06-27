@@ -43,7 +43,7 @@ def dashboard_base_url(bind_host: str = "127.0.0.1", bind_port: int = 8765) -> s
     """
     Public URL shown to users and used for readiness checks on VPS.
     Local: http(s)://127.0.0.1:8765/
-    VPS:   https://guardian.learniam.online/ (when GUARDIAN_PUBLIC_HOST is set)
+    VPS:   https://guardian.example.com/ (when GUARDIAN_PUBLIC_HOST is set)
     """
     explicit = os.environ.get("GUARDIAN_PUBLIC_URL", "").strip().rstrip("/")
     if explicit:

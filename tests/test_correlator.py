@@ -289,3 +289,61 @@ def test_resynthesis_skipped_until_significant_growth(monkeypatch):
     c._synthesize(camp)
     assert calls["n"] == 1
     assert camp.synthesized_alert_count == 6
+
+
+# ─── immediate_actions propagation (regression for dropped recommendations) ────
+
+def test_immediate_actions_reach_to_dict_from_slm(monkeypatch):
+    """SLM-supplied immediate_actions must survive into the campaign dict.
+
+    Previously they were written to a non-existent `metadata_extra` attribute and
+    never serialized, so the dashboard never received campaign recommendations.
+    """
+    jobs = []
+    monkeypatch.setattr(
+        "guardian.engine.analysis_queue.submit_analysis",
+        lambda fn: jobs.append(fn),
+    )
+
+    class _FakeEngine:
+        def analyze(self, *a, **k):
+            return (
+                '{"title": "C", "severity": "HIGH", "attack_narrative": "n", '
+                '"immediate_actions": ["isolate host", "rotate creds", "review logs"]}'
+            )
+
+    monkeypatch.setattr("guardian.engine.slm.get_engine", lambda *a, **k: _FakeEngine())
+
+    c = Correlator(use_slm=True)
+    c.start()
+    ip = "5.5.5.5"
+    for _ in range(3):
+        c.ingest(_make_alert(metadata={"src_ip": ip}))
+    assert jobs
+    jobs[-1]()
+
+    camp = c.get_campaigns()[0]
+    assert camp.immediate_actions == ["isolate host", "rotate creds", "review logs"]
+    assert camp.to_dict()["immediate_actions"] == [
+        "isolate host", "rotate creds", "review logs",
+    ]
+
+
+def test_immediate_actions_from_rule_based_fallback():
+    """The rule-based baseline narrative also populates immediate_actions."""
+    from guardian.engine.correlator import _ensure_baseline_narrative
+
+    camp = Campaign()
+    camp.alerts = [_make_alert(), _make_alert()]
+    _ensure_baseline_narrative(camp)
+    assert camp.immediate_actions  # non-empty list of recommended responses
+    assert camp.to_dict()["immediate_actions"] == camp.immediate_actions
+
+
+def test_immediate_actions_tolerates_bad_slm_value(monkeypatch):
+    """A non-list immediate_actions from a flaky SLM must not crash; degrade to []."""
+    from guardian.engine.correlator import _apply_synthesis_data
+
+    camp = Campaign()
+    _apply_synthesis_data(camp, {"title": "x", "immediate_actions": "not-a-list"})
+    assert camp.immediate_actions == []

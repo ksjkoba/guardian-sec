@@ -2351,7 +2351,7 @@
       <p>Guardian is a local security dashboard that combines personal breach monitoring with live threat intelligence. It runs on your machine (default: <code style="font-family:var(--mono);font-size:0.85em">127.0.0.1</code>) and is designed for individuals and organisations in India who want visibility into data breaches and global security feeds while minimising unnecessary sharing of personal data.</p>
       <p>Personal Check queries public breach databases on your behalf. Threat Feed aggregates open-source intelligence (OSINT) from providers such as ThreatFox, URLhaus, and others. Guardian does not sell your digital personal data and does not use it for advertising.</p>
       <div class="legal-callout"><strong>How Guardian compares:</strong> Guardian is not a replacement for Have I Been Pwned or VirusTotal — it is a <em>free, local, unified defense dashboard</em>. Breach checks use parallel free sources (XposedOrNot + HackMyIP). IOC scans combine 100k+ local threat feeds with live abuse.ch APIs (ThreatFox, URLhaus, MalwareBazaar). <strong>File uploads</strong> are scanned locally with ClamAV (when installed) plus hash intelligence — similar to a VirusTotal file check, but without sending your file to the cloud. HIBP is optional only if you explicitly enable it.</div>
-      <div class="legal-callout"><strong>Data Fiduciary (operator):</strong> Guardian is built and operated by <strong>Kshitish Jha</strong> as an individual sole operator at <strong>learniam.online</strong> — not a registered company. For this deployment, the operator acts as the Data Fiduciary under the DPDP Act.</div>
+      <div class="legal-callout"><strong>Data Fiduciary (operator):</strong> Guardian is open-source software you self-host. The <strong>operator who deploys this instance</strong> acts as the Data Fiduciary under the DPDP Act and should replace the contact details below with their own.</div>
     </section>
 
     <section class="legal-section" id="privacy">
@@ -2465,13 +2465,13 @@
 
     <section class="legal-section" id="contact">
       <h2>Contact &amp; grievance redressal</h2>
-      <p>Under Section 13 of the DPDP Act, every Data Fiduciary must publish contact details for a Grievance Officer or person authorised to respond to Data Principals. Guardian is operated by <strong>Kshitish Jha</strong> as sole developer and operator; he serves as Grievance Officer for this deployment.</p>
+      <p>Under Section 13 of the DPDP Act, every Data Fiduciary must publish contact details for a Grievance Officer or person authorised to respond to Data Principals. As the operator self-hosting this Guardian instance, you are responsible for publishing your own grievance contact details below.</p>
       <ul>
-        <li><strong>Operator &amp; Grievance Officer:</strong> Kshitish Jha — <a href="mailto:grievance@learniam.online" style="color:var(--primary)">grievance@learniam.online</a></li>
-        <li><strong>Privacy / DPDP queries:</strong> <a href="mailto:privacy@learniam.online" style="color:var(--primary)">privacy@learniam.online</a></li>
-        <li><strong>Security vulnerabilities:</strong> <a href="mailto:security@learniam.online" style="color:var(--primary)">security@learniam.online</a></li>
-        <li><strong>General contact:</strong> <a href="mailto:contact@learniam.online" style="color:var(--primary)">contact@learniam.online</a></li>
-        <li><strong>Operator location:</strong> India (sole operator project — contact by email; no corporate registered office)</li>
+        <li><strong>Operator &amp; Grievance Officer:</strong> [your name] — <a href="mailto:grievance@example.com" style="color:var(--primary)">grievance@example.com</a></li>
+        <li><strong>Privacy / DPDP queries:</strong> <a href="mailto:privacy@example.com" style="color:var(--primary)">privacy@example.com</a></li>
+        <li><strong>Security vulnerabilities:</strong> <a href="mailto:security@example.com" style="color:var(--primary)">security@example.com</a></li>
+        <li><strong>General contact:</strong> <a href="mailto:contact@example.com" style="color:var(--primary)">contact@example.com</a></li>
+        <li><strong>Operator location:</strong> [your jurisdiction]</li>
       </ul>
       <p>The operator will endeavour to resolve grievances within timelines prescribed under the DPDP Act and applicable rules. If you are not satisfied with the response, you may approach the <strong>Data Protection Board of India</strong> as provided under the DPDP Act.</p>
     </section>
@@ -2500,12 +2500,12 @@
         <label for="set-deploy-mode">Deployment mode</label>
         <select id="set-deploy-mode">
           <option value="local">local — this PC only (127.0.0.1)</option>
-          <option value="vps">vps — public subdomain (e.g. guardian.learniam.online)</option>
+          <option value="vps">vps — public subdomain (e.g. guardian.example.com)</option>
         </select>
       </div>
       <div class="settings-row">
         <label for="set-public-host">Public hostname (VPS)</label>
-        <input type="text" id="set-public-host" placeholder="guardian.learniam.online" />
+        <input type="text" id="set-public-host" placeholder="guardian.example.com" />
       </div>
       <div class="settings-row">
         <label><input type="checkbox" id="set-insecure-ssl" /> Allow insecure SSL (corporate proxy)</label>
@@ -2528,7 +2528,7 @@
 </div>
 
 <footer class="site-footer">
-  <span>© Guardian · Kshitish Jha · learniam.online</span>
+  <span>© Guardian · open-source security dashboard</span>
   <div class="site-footer-links">
     <button type="button" data-legal="about">About</button>
     <button type="button" data-legal="privacy">Privacy</button>

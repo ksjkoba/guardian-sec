@@ -9,7 +9,7 @@ User=guardian
 Group=guardian
 WorkingDirectory=/opt/guardian/Sec
 Environment=GUARDIAN_DEPLOY_MODE=vps
-Environment=GUARDIAN_PUBLIC_HOST=guardian.learniam.online
+Environment=GUARDIAN_PUBLIC_HOST=guardian.example.com
 EnvironmentFile=-/opt/guardian/Sec/.env
 ExecStart=/opt/guardian/Sec/.venv/bin/python3 -m guardian.cli serve --host 127.0.0.1 --port 8765
 Restart=on-failure

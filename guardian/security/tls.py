@@ -28,18 +28,29 @@ def ensure_local_tls_cert() -> tuple[str, str] | None:
     if cert_path.exists() and key_path.exists():
         return str(cert_path), str(key_path)
 
-    subprocess.run(
-        [
-            "openssl", "req", "-x509", "-newkey", "rsa:2048",
-            "-keyout", str(key_path),
-            "-out", str(cert_path),
-            "-days", "825",
-            "-nodes",
-            "-subj", "/CN=Guardian Local/O=learniam.online/C=IN",
-        ],
-        check=True,
-        capture_output=True,
-    )
+    try:
+        subprocess.run(
+            [
+                "openssl", "req", "-x509", "-newkey", "rsa:2048",
+                "-keyout", str(key_path),
+                "-out", str(cert_path),
+                "-days", "825",
+                "-nodes",
+                "-subj", "/CN=Guardian Local/O=Guardian/C=US",
+            ],
+            check=True,
+            capture_output=True,
+        )
+    except FileNotFoundError as exc:
+        raise RuntimeError(
+            "GUARDIAN_TLS_AUTO=1 requires the 'openssl' command, which was not "
+            "found. Install OpenSSL or provide GUARDIAN_TLS_CERT/GUARDIAN_TLS_KEY."
+        ) from exc
+    except subprocess.CalledProcessError as exc:
+        detail = (exc.stderr or b"").decode(errors="replace").strip()
+        raise RuntimeError(
+            f"Failed to generate a self-signed TLS certificate with openssl: {detail}"
+        ) from exc
     try:
         cert_path.chmod(0o644)
         key_path.chmod(0o600)

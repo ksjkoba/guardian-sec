@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# VPS deployment — public dashboard at https://guardian.learniam.online
+# VPS deployment — public dashboard at https://guardian.example.com
 set -euo pipefail
 cd "$(dirname "$0")/.."
 source .venv/bin/activate
 
 export GUARDIAN_DEPLOY_MODE="${GUARDIAN_DEPLOY_MODE:-vps}"
-export GUARDIAN_PUBLIC_HOST="${GUARDIAN_PUBLIC_HOST:-guardian.learniam.online}"
+export GUARDIAN_PUBLIC_HOST="${GUARDIAN_PUBLIC_HOST:-guardian.example.com}"
 export GUARDIAN_PUBLIC_PORT="${GUARDIAN_PUBLIC_PORT:-443}"
 export GUARDIAN_BIND_HOST="${GUARDIAN_BIND_HOST:-0.0.0.0}"
 export GUARDIAN_BREACH_PROVIDER="${GUARDIAN_BREACH_PROVIDER:-auto}"
@@ -26,7 +26,7 @@ fi
 HOST="${GUARDIAN_BIND_HOST:-0.0.0.0}"
 PORT="${GUARDIAN_PORT:-8765}"
 
-echo "Guardian VPS — ${GUARDIAN_PUBLIC_HOST:-guardian.learniam.online}"
+echo "Guardian VPS — ${GUARDIAN_PUBLIC_HOST:-guardian.example.com}"
 echo "  Bind: ${HOST}:${PORT}"
 if [[ -n "${GUARDIAN_TLS_CERT:-}" ]]; then
   echo "  Public: https://${GUARDIAN_PUBLIC_HOST}/ (TLS cert configured)"
