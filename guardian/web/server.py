@@ -213,8 +213,9 @@ def create_app(dashboard_state: "DashboardState | None" = None) -> "FastAPI":
     except ImportError:
         sessions = None  # type: ignore[assignment]
 
-    from guardian.security.access import AccessManager
+    from guardian.security.access import AccessManager, LoginThrottle
     access = AccessManager()
+    login_throttle = LoginThrottle()
     # NOTE: the asyncio.Queue is intentionally NOT created here. Creating it at
     # factory-call time (main thread, no running loop) binds it to the wrong
     # loop when uvicorn runs in a background thread - the broadcaster then
@@ -403,23 +404,56 @@ def create_app(dashboard_state: "DashboardState | None" = None) -> "FastAPI":
             return JSONResponse({"error": str(e), "e2e_available": False}, status_code=503)
 
     @app.post("/api/security/login")
-    async def security_login(body: dict) -> "JSONResponse":
+    async def security_login(request: "Request", body: dict) -> "JSONResponse":
         """Exchange the dashboard password for a short-lived access token."""
-        from guardian.security.access import login_required, verify_password
+        from guardian.security.access import login_required, log_login_event, verify_password
 
         if not login_required():
             # No password configured — login is a no-op; the dashboard is open
             # (loopback-only is the expected deployment for this case).
             return JSONResponse({"ok": True, "login_required": False})
+
+        client = request.client.host if request.client else "unknown"
+
+        # Brute-force throttle: refuse while the client is locked out, before
+        # even checking the password.
+        remaining = login_throttle.locked_for(client)
+        if remaining > 0:
+            wait = int(remaining) + 1
+            return JSONResponse(
+                {"error": f"too many failed attempts — try again in {wait}s", "locked": True},
+                status_code=429,
+                headers={"Retry-After": str(wait)},
+            )
+
         password = str((body or {}).get("password", ""))
         if not verify_password(password):
+            lockout = login_throttle.record_failure(client)
+            if lockout > 0:
+                log_login_event(
+                    "login_lockout", client,
+                    detail=f"locked for {int(lockout)}s after repeated failures",
+                )
+                return JSONResponse(
+                    {"error": f"too many failed attempts — locked out for {int(lockout)}s", "locked": True},
+                    status_code=429,
+                    headers={"Retry-After": str(int(lockout) + 1)},
+                )
+            log_login_event("login_failure", client)
             return JSONResponse({"error": "invalid password"}, status_code=401)
+
+        login_throttle.record_success(client)
         token, expires = access.issue()
+        log_login_event("login_success", client)
         return JSONResponse({"ok": True, "access_token": token, "expires_at": expires})
 
     @app.post("/api/security/logout")
     async def security_logout(request: "Request") -> "JSONResponse":
+        from guardian.security.access import log_login_event
+
         access.revoke(request.headers.get("X-Guardian-Access", ""))
+        client = request.client.host if request.client else "unknown"
+        log_login_event("logout", client)
         return JSONResponse({"ok": True})
 
     def _unwrap(body: dict, path: str, request: "Request") -> dict | "JSONResponse":

@@ -154,6 +154,121 @@ def test_logout_revokes_token(gated_client):
     assert gated_client.get("/api/alerts", headers=hdr).status_code == 401
 
 
+# ─── Unit: LoginThrottle ──────────────────────────────────────────────────────
+
+def test_throttle_locks_after_max_failures():
+    t = access.LoginThrottle(max_failures=3, lockout_secs=60, window_secs=900)
+    client = "8.8.8.8"
+    assert t.is_locked(client) is False
+    assert t.record_failure(client) == 0.0  # 1
+    assert t.record_failure(client) == 0.0  # 2
+    locked = t.record_failure(client)        # 3 -> lockout
+    assert locked == 60
+    assert t.is_locked(client) is True
+    assert 0 < t.locked_for(client) <= 60
+
+
+def test_throttle_success_clears_failures():
+    t = access.LoginThrottle(max_failures=3, lockout_secs=60)
+    client = "8.8.8.8"
+    t.record_failure(client)
+    t.record_failure(client)
+    t.record_success(client)
+    # Counter reset — a single failure shouldn't lock now.
+    assert t.record_failure(client) == 0.0
+    assert t.is_locked(client) is False
+
+
+def test_throttle_lockout_expires():
+    t = access.LoginThrottle(max_failures=1, lockout_secs=-1)  # expires immediately
+    client = "8.8.8.8"
+    t.record_failure(client)
+    assert t.is_locked(client) is False  # already expired
+
+
+def test_throttle_exempts_loopback_by_default(monkeypatch):
+    monkeypatch.delenv("GUARDIAN_LOGIN_THROTTLE_LOCAL", raising=False)
+    t = access.LoginThrottle(max_failures=1, lockout_secs=60)
+    for _ in range(5):
+        assert t.record_failure("127.0.0.1") == 0.0
+    assert t.is_locked("127.0.0.1") is False
+
+
+def test_throttle_can_include_loopback(monkeypatch):
+    monkeypatch.setenv("GUARDIAN_LOGIN_THROTTLE_LOCAL", "1")
+    t = access.LoginThrottle(max_failures=2, lockout_secs=60)
+    t.record_failure("127.0.0.1")
+    assert t.record_failure("127.0.0.1") == 60
+    assert t.is_locked("127.0.0.1") is True
+
+
+def test_throttle_window_drops_old_failures():
+    # window=0 means every prior failure is immediately stale, so the count
+    # never accumulates toward a lockout.
+    t = access.LoginThrottle(max_failures=3, lockout_secs=60, window_secs=0)
+    client = "8.8.8.8"
+    for _ in range(10):
+        assert t.record_failure(client) == 0.0
+    assert t.is_locked(client) is False
+
+
+# ─── Unit: audit log ──────────────────────────────────────────────────────────
+
+def test_audit_log_writes_jsonl(monkeypatch, tmp_path):
+    import json as _json
+    import guardian.security.vault as vault
+    monkeypatch.setattr(vault, "data_dir", lambda: tmp_path)
+
+    access.log_login_event("login_failure", "8.8.8.8")
+    access.log_login_event("login_success", "8.8.8.8", detail="ok")
+
+    log = tmp_path / "audit.log"
+    assert log.exists()
+    lines = [l for l in log.read_text().splitlines() if l.strip()]
+    assert len(lines) == 2
+    first = _json.loads(lines[0])
+    assert first["event"] == "login_failure"
+    assert first["client"] == "8.8.8.8"
+    assert "ts" in first and "iso" in first
+    assert _json.loads(lines[1])["detail"] == "ok"
+
+
+def test_audit_log_never_raises(monkeypatch):
+    import guardian.security.vault as vault
+
+    def _boom():
+        raise OSError("no data dir")
+
+    monkeypatch.setattr(vault, "data_dir", _boom)
+    # Must not propagate — auditing is best-effort.
+    access.log_login_event("login_failure", "1.2.3.4")
+
+
+# ─── Integration: throttle + audit via the login endpoint ─────────────────────
+
+def test_login_lockout_via_endpoint(monkeypatch, tmp_path):
+    monkeypatch.setenv("GUARDIAN_API_AUTH", "0")
+    monkeypatch.setenv("GUARDIAN_ALLOW_PLAINTEXT", "1")
+    monkeypatch.setenv("GUARDIAN_DATA_DIR", str(tmp_path / "guardian"))
+    monkeypatch.setenv("GUARDIAN_DASHBOARD_PASSWORD", "letmein")
+    monkeypatch.setenv("GUARDIAN_LOGIN_MAX_FAILURES", "3")
+    monkeypatch.setenv("GUARDIAN_LOGIN_LOCKOUT_SECS", "300")
+    # TestClient reports client as "testclient" (not loopback), so throttling applies.
+    import guardian.web.persistence as persist
+    persist._initialized = False
+    app = create_app(dashboard_state=DashboardState())
+    with TestClient(app) as c:
+        for _ in range(2):
+            assert c.post("/api/security/login", json={"password": "wrong"}).status_code == 401
+        # 3rd failure triggers lockout (429), not a plain 401.
+        r = c.post("/api/security/login", json={"password": "wrong"})
+        assert r.status_code == 429
+        assert r.json().get("locked") is True
+        assert "Retry-After" in r.headers
+        # Even the correct password is refused while locked out.
+        assert c.post("/api/security/login", json={"password": "letmein"}).status_code == 429
+
+
 def test_no_password_means_open(monkeypatch, tmp_path):
     """Without a configured password, the gate is inactive (local-use default)."""
     monkeypatch.setenv("GUARDIAN_API_AUTH", "0")
