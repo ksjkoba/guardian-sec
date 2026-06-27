@@ -93,6 +93,7 @@ Settings are saved to `~/.guardian/settings.json` (editable from the dashboard's
 | `GUARDIAN_TLS_AUTO` | Enable self-signed HTTPS |
 | `GUARDIAN_BREACH_PROVIDER` | Breach-lookup backend (`auto`, `mock`, …) |
 | `GUARDIAN_INSECURE_SSL` | Allow insecure SSL for corporate proxies |
+| `GUARDIAN_ALLOW_BLOCK_PRIVATE` | Permit active response to firewall-block private/RFC1918 IPs (off by default — prevents self-DoS) |
 
 ## Development
 

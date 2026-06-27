@@ -13,6 +13,7 @@ Every action is:
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import os
 import platform
@@ -32,6 +33,59 @@ _audit_lock = threading.Lock()
 
 AUTO_RESPOND_THRESHOLD = Severity.HIGH   # only auto-respond to HIGH and CRITICAL
 DRY_RUN_DEFAULT = True                    # safe by default
+
+# Hard cap on firewall rules inserted for a single campaign, so a campaign that
+# references (or is tricked via log injection into referencing) many IPs cannot
+# flood the firewall.
+MAX_CAMPAIGN_BLOCKS = 16
+
+
+def _allow_blocking_private() -> bool:
+    """Whether blocking RFC1918/private addresses is permitted.
+
+    Off by default: blocking a private/LAN address (gateway, DNS, the host
+    itself) is a self-inflicted denial of service and is exactly what an
+    attacker would try to induce via crafted log lines. Opt in only when you
+    know the deployment is purely internal.
+    """
+    return os.environ.get("GUARDIAN_ALLOW_BLOCK_PRIVATE", "").lower() in ("1", "true", "yes")
+
+
+def is_blockable_ip(ip: str) -> bool:
+    """Return True only for a valid, public, safely-blockable IP address.
+
+    Refuses to block: malformed addresses, loopback, link-local, multicast,
+    reserved/unspecified, and (unless explicitly allowed) private ranges. This
+    is the safety guard for an engine that inserts DROP firewall rules.
+    """
+    try:
+        addr = ipaddress.ip_address(ip.strip())
+    except ValueError:
+        return False
+    if (
+        addr.is_loopback
+        or addr.is_link_local
+        or addr.is_multicast
+        or addr.is_reserved
+        or addr.is_unspecified
+    ):
+        return False
+    if addr.is_private and not _allow_blocking_private():
+        return False
+    return True
+
+
+def _safe_block_targets(candidates: "list[str]") -> "list[str]":
+    """De-dup, validate, and filter a list of candidate IPs to safe ones."""
+    seen: set[str] = set()
+    out: list[str] = []
+    for ip in candidates:
+        if ip in seen:
+            continue
+        seen.add(ip)
+        if is_blockable_ip(ip):
+            out.append(ip)
+    return out
 
 
 class ResponseAction(str, Enum):
@@ -129,6 +183,23 @@ def _detect_firewall() -> str:
 
 
 def block_ip(ip: str, dry_run: bool = DRY_RUN_DEFAULT) -> ResponseResult:
+    # Defense in depth: refuse to block unsafe targets even on a direct call,
+    # so loopback/private/invalid IPs can never reach the firewall.
+    if not is_blockable_ip(ip):
+        result = ResponseResult(
+            action=ResponseAction.BLOCK_IP,
+            target=ip,
+            success=False,
+            dry_run=dry_run,
+            message=(
+                f"Refused to block {ip!r}: not a valid public address "
+                "(loopback/private/link-local/invalid are protected). "
+                "Set GUARDIAN_ALLOW_BLOCK_PRIVATE=1 to allow private ranges."
+            ),
+        )
+        _audit(result)
+        return result
+
     fw = _detect_firewall()
     if fw == "iptables":
         cmd = ["iptables", "-I", "INPUT", "1", "-s", ip, "-j", "DROP"]
@@ -278,8 +349,8 @@ class AutoResponder:
         # Block source IP from network alerts
         if alert.module == "network_monitor":
             text = f"{alert.description} {alert.evidence}"
-            ips = _IP_RE.findall(text)
-            for ip in ips[:1]:  # block first extracted IP
+            safe_ips = _safe_block_targets(_IP_RE.findall(text))
+            for ip in safe_ips[:1]:  # block first safe extracted IP
                 r = block_ip(ip, dry_run=self.dry_run)
                 r.alert_id = alert.id
                 results.append(r)
@@ -304,10 +375,13 @@ class AutoResponder:
             return results
 
         # Collect all IPs across all alerts in the campaign
-        attacker_ips: set[str] = set()
+        candidates: list[str] = []
         for alert in campaign.alerts:
             text = f"{alert.description} {alert.evidence} {alert.title}"
-            attacker_ips.update(_IP_RE.findall(text))
+            candidates.extend(_IP_RE.findall(text))
+
+        # Validate, de-dup, and cap so a campaign can't flood the firewall.
+        attacker_ips = _safe_block_targets(candidates)[:MAX_CAMPAIGN_BLOCKS]
 
         for ip in attacker_ips:
             r = block_ip(ip, dry_run=self.dry_run)
