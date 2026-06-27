@@ -35,7 +35,7 @@ def render_alert_table(alerts: Sequence[Alert], title: str = "Guardian Alerts") 
     table.add_column("Recommendation", ratio=1)
 
     for alert in sorted(alerts, key=lambda a: (
-        ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"].index(alert.severity.value), a.timestamp
+        ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"].index(a.severity.value), a.timestamp
     )):
         t = time.strftime("%H:%M:%S", time.localtime(alert.timestamp))
         sev_text = Text(alert.severity.value, style=alert.severity.color)

@@ -8,7 +8,10 @@ import pytest
 def _reset_guardian_state() -> None:
     import guardian.intel.breach_lookup as bl
     import guardian.security.keys as keys
+    import guardian.security.vault as vault
     import guardian.web.persistence as persist
+
+    vault.reset_data_dir_cache()
 
     with bl._watchlist_lock:
         bl._watchlist.clear()

@@ -465,6 +465,10 @@ def scan_processes(output: Optional[str], model: Optional[str]) -> None:
               help="Active response without dry-run (CAUTION: takes real action)")
 @click.option("--no-ti", is_flag=True, default=False, help="Disable threat intelligence feeds")
 @click.option("--refresh-feeds", is_flag=True, default=False, help="Force-refresh TI feed cache")
+@click.option("--global-ticker/--no-global-ticker", default=True, show_default=True,
+              help="Poll global TI APIs and surface new threats")
+@click.option("--global-interval", default=120, show_default=True,
+              help="Seconds between global threat feed polls")
 def defend(
     log_files: tuple,
     watch_dirs: tuple,
@@ -475,6 +479,8 @@ def defend(
     respond_live: bool,
     no_ti: bool,
     refresh_feeds: bool,
+    global_ticker: bool,
+    global_interval: int,
 ) -> None:
     """Run ALL Guardian modules simultaneously — full defensive coverage."""
     global _responder

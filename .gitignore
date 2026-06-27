@@ -21,6 +21,10 @@ build/
 models/
 *.gguf
 
+# Runtime artifacts / logs
+*.log
+guardian_response_audit.jsonl
+
 # OS / editor
 .DS_Store
 Thumbs.db
