@@ -40,10 +40,30 @@ Share that URL plus the dashboard password (in `.env`).
 
 Notes:
 - The dashboard is only reachable while the script (your PC) is running.
-- The quick-tunnel URL is random and changes on restart. For a **stable custom
-  URL** (still free), create a free Cloudflare account + domain and use a named
-  tunnel — the script prints the exact commands.
+- The quick-tunnel URL is random and changes on restart.
 - Always keep the dashboard password set; the tunnel is open to the internet.
+
+### Stable custom URL (free, your own domain)
+
+For a permanent URL like `https://guardian.yourdomain.com` that never changes,
+use a Cloudflare **named tunnel** (free; needs a free Cloudflare account with
+your domain added).
+
+```bash
+# 1. Set your hostname in .env
+echo 'GUARDIAN_PUBLIC_HOST=guardian.yourdomain.com' >> .env
+
+# 2. One-time interactive setup (opens a browser to authorize the tunnel)
+./scripts/setup-named-tunnel.sh
+
+# 3. Run it anytime afterwards — same URL every time
+./scripts/serve-named.sh
+```
+
+The one-time setup logs in, creates a tunnel named `guardian`, and adds a CNAME
+DNS record routing your hostname to it. `serve-named.sh` then starts the
+password-protected dashboard and serves it at your hostname. Both the dashboard
+password and Cloudflare TLS apply.
 
 ---
 
