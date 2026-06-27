@@ -159,3 +159,94 @@ def test_all_documented_scenarios():
     for s in MOCK_SCENARIOS:
         r = check_breach(s["type"], s["sample"])  # type: ignore[arg-type]
         assert r.status == s["expected"], f"scenario {s['id']} expected {s['expected']} got {r.status}"
+
+
+# ─── Pwned Passwords range parsing (robust to malformed upstream lines) ────────
+
+def test_pwned_count_for_suffix_matches_hit():
+    from guardian.intel.breach_lookup import _pwned_count_for_suffix
+
+    raw = "0018A45C4D1DEF81644B54AB7F969B88D65:12\nFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF:9\n"
+    assert _pwned_count_for_suffix(raw, "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF") == 9
+
+
+def test_pwned_count_for_suffix_no_match():
+    from guardian.intel.breach_lookup import _pwned_count_for_suffix
+
+    raw = "0018A45C4D1DEF81644B54AB7F969B88D65:12\n"
+    assert _pwned_count_for_suffix(raw, "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA") == 0
+
+
+def test_pwned_count_for_suffix_tolerates_malformed_lines():
+    """A blank/garbage count (e.g. from Add-Padding rows) must not raise."""
+    from guardian.intel.breach_lookup import _pwned_count_for_suffix
+
+    # Matching suffix but an empty tally — previously raised ValueError -> 500.
+    raw = "ABCDEF0123456789ABCDEF0123456789ABC:\nGARBAGE_NO_COLON\n"
+    assert _pwned_count_for_suffix(raw, "ABCDEF0123456789ABCDEF0123456789ABC") == 0
+    # Non-numeric tally also degrades to 0 rather than crashing.
+    raw2 = "ABCDEF0123456789ABCDEF0123456789ABC:notanumber\n"
+    assert _pwned_count_for_suffix(raw2, "ABCDEF0123456789ABCDEF0123456789ABC") == 0
+
+
+def test_safe_int():
+    from guardian.intel.breach_lookup import _safe_int
+
+    assert _safe_int(5) == 5
+    assert _safe_int("7") == 7
+    assert _safe_int(None) == 0
+    assert _safe_int("many") == 0
+    assert _safe_int("unknown", default=-1) == -1
+
+
+def test_password_range_mock_suffix_matches_real_sha1():
+    """Regression: the mock 'password' suffix must be the real 35-char SHA-1 tail.
+
+    A previous value was a 40-char string that both failed length validation and
+    didn't match what a client computes, making the demo path unreachable.
+    """
+    import hashlib
+
+    digest = hashlib.sha1(b"password").hexdigest().upper()
+    prefix, suffix = digest[:5], digest[5:]
+    assert prefix == "5BAA6"
+    assert len(suffix) == 35
+
+    import os
+    from guardian.intel.breach_lookup import check_pwned_password_range
+
+    prev = os.environ.get("GUARDIAN_BREACH_PROVIDER")
+    os.environ["GUARDIAN_BREACH_PROVIDER"] = "mock"
+    try:
+        assert check_pwned_password_range(prefix, suffix).status == "pwned"
+    finally:
+        if prev is None:
+            os.environ.pop("GUARDIAN_BREACH_PROVIDER", None)
+        else:
+            os.environ["GUARDIAN_BREACH_PROVIDER"] = prev
+
+
+def test_password_range_invalid_inputs():
+    from guardian.intel.breach_lookup import check_pwned_password_range
+
+    assert check_pwned_password_range("XYZ", "0" * 35).status == "invalid"
+    assert check_pwned_password_range("ABCDE", "short").status == "invalid"
+
+
+def test_password_range_mock_hit():
+    """The mock provider returns a known pwned hit for the 'password' suffix."""
+    import os
+    from guardian.intel.breach_lookup import check_pwned_password_range
+
+    prev = os.environ.get("GUARDIAN_BREACH_PROVIDER")
+    os.environ["GUARDIAN_BREACH_PROVIDER"] = "mock"
+    try:
+        # Real SHA-1("password") suffix — what the client actually sends.
+        r = check_pwned_password_range("5BAA6", "1E4C9B93F3F0682250B6CF8331B7EE68FD8")
+        assert r.status == "pwned"
+        assert r.count > 0
+    finally:
+        if prev is None:
+            os.environ.pop("GUARDIAN_BREACH_PROVIDER", None)
+        else:
+            os.environ["GUARDIAN_BREACH_PROVIDER"] = prev

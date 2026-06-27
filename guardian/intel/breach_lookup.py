@@ -246,6 +246,14 @@ MOCK_SCENARIOS: list[dict[str, str]] = [
 ]
 
 
+def _safe_int(value: Any, default: int = 0) -> int:
+    """Coerce an untrusted (provider-supplied) value to int, never raising."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def _strip_html(text: str) -> str:
     return re.sub(r"<[^>]+>", " ", text).replace("&nbsp;", " ").strip()
 
@@ -1413,11 +1421,11 @@ def _query_xon_analytics(email: str) -> dict[str, Any]:
                         paste_id=str(p.get("id") or p.get("paste_id") or ""),
                         title=str(p.get("title") or p.get("name") or "Public paste"),
                         exposed_date=str(p.get("date") or p.get("exposed_date") or "unknown"),
-                        email_count=int(p.get("email_count") or 0),
+                        email_count=_safe_int(p.get("email_count")),
                     )
                 )
     paste_summary = data.get("PastesSummary") or {}
-    if not pastes and isinstance(paste_summary, dict) and int(paste_summary.get("cnt") or 0) > 0:
+    if not pastes and isinstance(paste_summary, dict) and _safe_int(paste_summary.get("cnt")) > 0:
         pastes.append(
             PasteExposure(
                 source=str(paste_summary.get("domain") or "Paste"),
@@ -1553,7 +1561,7 @@ def _query_hackmyip_raw(email: str) -> dict[str, Any]:
                 source_provider="HackMyIP",
             )
         )
-    count = int(payload.get("breaches") or 0)
+    count = _safe_int(payload.get("breaches"))
     exposed = count > 0 or bool(breaches)
     breaches = _xon_enrich_breaches(breaches)
     return {"ok": True, "breaches": breaches, "pastes": [], "exposed": exposed, "error": None}
@@ -2001,7 +2009,7 @@ def _hibp_lookup_email(email: str, api_key: str) -> BreachCheckResult:
                     paste_id=str(p.get("Id") or ""),
                     title=str(p.get("Title") or "Public paste"),
                     exposed_date=str(p.get("Date") or "unknown"),
-                    email_count=int(p.get("EmailCount") or 0),
+                    email_count=_safe_int(p.get("EmailCount")),
                 )
             )
 
@@ -2082,6 +2090,24 @@ PWNED_PASSWORDS_API = os.environ.get(
 _MOCK_PWNED_PASSWORDS = frozenset({"password", "password123", "123456", "qwerty", "letmein"})
 
 
+def _pwned_count_for_suffix(raw: str, suffix: str) -> int:
+    """Find the breach count for a SHA-1 suffix in a Pwned Passwords range body.
+
+    The response is `SUFFIX:COUNT` per line, but with `Add-Padding: true` it can
+    include synthetic padding rows (count 0) and the occasional malformed/blank
+    line. Parse defensively so an upstream hiccup degrades to "not found"
+    instead of raising and 500-ing the endpoint.
+    """
+    for line in raw.splitlines():
+        part, _, tally = line.partition(":")
+        if part.strip() == suffix:
+            try:
+                return int(tally.strip())
+            except ValueError:
+                return 0
+    return 0
+
+
 def check_pwned_password(password: str) -> PasswordCheckResult:
     """Check if a password appears in breach dumps (never sends full password)."""
     now = time.time()
@@ -2134,12 +2160,7 @@ def check_pwned_password(password: str) -> PasswordCheckResult:
             checked_at=now,
         )
 
-    count = 0
-    for line in raw.splitlines():
-        part, _, tally = line.partition(":")
-        if part.strip() == suffix:
-            count = int(tally.strip())
-            break
+    count = _pwned_count_for_suffix(raw, suffix)
 
     if count:
         return PasswordCheckResult(
@@ -2187,8 +2208,11 @@ def check_pwned_password_range(prefix: str, suffix: str) -> PasswordCheckResult:
         )
 
     if _provider_name() == "mock":
+        # SHA-1("password") = 5BAA6 1E4C9B93F3F0682250B6CF8331B7EE68FD8.
+        # The suffix is the real 35-hex-char tail so the client's k-anonymity
+        # request (which sends the genuine SHA-1 of the typed password) matches.
         mock_suffixes = {
-            "5BAA6": "1E4C9B793F3F0D68A277AE3FD59EA43CD140EB23",
+            "5BAA6": "1E4C9B93F3F0682250B6CF8331B7EE68FD8",
         }
         if prefix == "5BAA6" and suffix == mock_suffixes["5BAA6"]:
             return PasswordCheckResult(
@@ -2218,12 +2242,7 @@ def check_pwned_password_range(prefix: str, suffix: str) -> PasswordCheckResult:
             checked_at=now,
         )
 
-    count = 0
-    for line in raw.splitlines():
-        part, _, tally = line.partition(":")
-        if part.strip() == suffix:
-            count = int(tally.strip())
-            break
+    count = _pwned_count_for_suffix(raw, suffix)
 
     if count:
         return PasswordCheckResult(
