@@ -99,7 +99,7 @@ Settings are saved to `~/.guardian/settings.json` (editable from the dashboard's
 
 ```bash
 pip install -e ".[web]" pytest pyflakes httpx2   # httpx2 backs starlette's TestClient
-pytest -q                 # run the test suite (246 tests)
+pytest -q                 # run the test suite
 pyflakes guardian/        # lint
 ```
 
@@ -125,13 +125,16 @@ docs/               # handoff + deployment notes
 - [`docs/guardian-handoff.md`](docs/guardian-handoff.md) — project context and architecture
 - [`docs/deployment-learniam.md`](docs/deployment-learniam.md) — domain, landing page, and VPS deployment
 
-## Location
+## Security & deployment posture
 
-| Environment | Path |
-|-------------|------|
-| WSL / Linux | `/home/jhak/Guardian/Sec` |
-| Short form | `~/Guardian/Sec` |
-| Windows (File Explorer) | `\\wsl$\Ubuntu\home\jhak\Guardian\Sec` |
+Guardian is designed **local-first** — a personal SOC dashboard bound to `127.0.0.1`.
+
+- **Run it on loopback** (`--host 127.0.0.1`, the default) for single-machine use.
+- **API auth** (E2E session handshake) is on by default but requires the `cryptography` package (installed via the `web`/`full` extras). If it is missing, the server warns loudly at startup that the API is unauthenticated.
+- **Exposing the dashboard to a network or the internet is not recommended without a hardened front end.** Put it behind a reverse proxy that terminates TLS and enforces authentication (basic auth, mTLS, or SSO). The built-in session handshake provides end-to-end payload encryption, **not** access control — anyone who can reach a public dashboard can complete the handshake.
+- **Active response is dry-run by default.** Live blocking/killing/quarantine is opt-in (`--respond-live`) and guarded against self-destructive targets (loopback/private IPs, init/own PID, symlinks and protected system paths).
+
+See [`docs/deployment-learniam.md`](docs/deployment-learniam.md) for VPS notes.
 
 ## License
 
