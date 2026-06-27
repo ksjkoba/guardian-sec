@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Callable, Iterator
 
 from guardian.engine.alert import Alert
+from guardian.engine.analysis_queue import submit_analysis
 from guardian.engine.slm import get_engine
 
 MODULE = "log_analyzer"
@@ -58,8 +59,11 @@ class LogAnalyzer:
         self.callback = callback
         self._stop = threading.Event()
         self._threads: list[threading.Thread] = []
+        # Live mode (start()) offloads inference to the shared worker queue.
+        self._async_analysis = False
 
     def start(self) -> None:
+        self._async_analysis = True
         for path in self.paths:
             t = threading.Thread(target=self._tail_file, args=(path,), daemon=True)
             t.start()
@@ -94,6 +98,14 @@ class LogAnalyzer:
             pass
 
     def _analyze_batch(self, lines: list[str], source: Path) -> None:
+        # In live mode, offload inference to the shared worker queue so tailing
+        # never blocks. One-shot use runs inline.
+        if self._async_analysis:
+            submit_analysis(lambda: self._run_batch_analysis(lines, source))
+        else:
+            self._run_batch_analysis(lines, source)
+
+    def _run_batch_analysis(self, lines: list[str], source: Path) -> None:
         try:
             engine = get_engine()
             raw = engine.analyze(_build_prompt(lines), max_tokens=300)

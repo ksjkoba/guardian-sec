@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 from guardian.engine.alert import Alert
+from guardian.engine.analysis_queue import submit_analysis
 from guardian.engine.slm import get_engine
 
 MODULE = "network_monitor"
@@ -61,8 +62,15 @@ def _build_prompt(events: list[ConnEvent], context: str) -> str:
 class HeuristicTracker:
     """Fast pre-filter using statistical heuristics before SLM invocation."""
 
-    def __init__(self, callback: Callable[[list[ConnEvent], str], None]):
+    def __init__(
+        self,
+        callback: Callable[[list[ConnEvent], str], None],
+        async_dispatch: bool = False,
+    ):
         self._callback = callback
+        # Live capture offloads SLM analysis to the shared worker queue; PCAP
+        # analysis dispatches synchronously so results are ready on return.
+        self._async_dispatch = async_dispatch
         self._lock = threading.Lock()
         # src_ip -> list of (timestamp, dst_port)
         self._scan_tracker: dict[str, list[tuple[float, int]]] = defaultdict(list)
@@ -110,9 +118,12 @@ class HeuristicTracker:
                 batch = self._flagged_events[:20]
                 self._flagged_events = self._flagged_events[20:]
                 context = "; ".join(context_parts)
-                threading.Thread(
-                    target=self._callback, args=(batch, context), daemon=True
-                ).start()
+                if self._async_dispatch:
+                    # Offload to the shared bounded worker instead of spawning an
+                    # unbounded thread per batch (which could swamp the CPU).
+                    submit_analysis(lambda: self._callback(batch, context))
+                else:
+                    self._callback(batch, context)
 
 
 class NetworkMonitor:
@@ -122,7 +133,7 @@ class NetworkMonitor:
         self.callback = callback
         self.iface = iface
         self._stop = threading.Event()
-        self._tracker = HeuristicTracker(self._on_flagged)
+        self._tracker = HeuristicTracker(self._on_flagged, async_dispatch=True)
 
     def start(self) -> None:
         t = threading.Thread(target=self._capture_loop, daemon=True)
