@@ -132,6 +132,27 @@ def submit_analysis(fn: Job) -> bool:
     return get_analysis_queue().submit(fn)
 
 
+def queue_stats() -> dict:
+    """Report global-queue stats without creating the queue.
+
+    Returns ``{"active": False, ...}`` when no analysis has been submitted yet
+    (the worker is lazy), so callers can render an idle state cheaply.
+    """
+    with _instance_lock:
+        inst = _instance
+    if inst is None:
+        return {
+            "active": False,
+            "submitted": 0,
+            "processed": 0,
+            "dropped": 0,
+            "pending": 0,
+        }
+    stats = inst.stats()
+    stats["active"] = True
+    return stats
+
+
 def reset_analysis_queue() -> None:
     """Tear down the global queue (test isolation)."""
     global _instance

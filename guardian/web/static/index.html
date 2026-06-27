@@ -2143,6 +2143,10 @@
       <div class="hstat-val" id="stat-uptime" style="color:var(--green)">0s</div>
       <div class="hstat-label">Uptime</div>
     </div>
+    <div class="hstat" id="stat-queue-wrap" title="SLM analysis backlog — pending jobs waiting for inference. Dropped &gt; 0 means detections were shed because the queue was full.">
+      <div class="hstat-val" id="stat-queue">0</div>
+      <div class="hstat-label">Analysis queue</div>
+    </div>
   </div>
 </header>
 
@@ -3071,6 +3075,34 @@ function updateStats({total, sev, ioc}) {
   renderStats();
 }
 
+// ── Analysis queue health ────────────────────────────────────────────────────
+function renderQueue(q) {
+  const el = document.getElementById('stat-queue');
+  const wrap = document.getElementById('stat-queue-wrap');
+  if (!el || !wrap) return;
+  const pending = q.pending || 0;
+  const dropped = q.dropped || 0;
+  el.textContent = dropped > 0 ? `${pending} (−${dropped})` : `${pending}`;
+  // Color signals load: green idle, amber backed up, red shedding work.
+  let color = 'var(--green)';
+  if (dropped > 0) color = 'var(--crit, #ff5c5c)';
+  else if (pending > 0) color = 'var(--high, #ffb454)';
+  el.style.color = color;
+  wrap.title = q.active
+    ? `SLM analysis: ${q.processed || 0} processed, ${pending} pending, ${dropped} dropped (full-queue backpressure).`
+    : 'SLM analysis queue idle — no events submitted yet.';
+}
+
+async function loadQueueStats() {
+  try {
+    const r = await secureFetch('/api/queue');
+    if (!r.ok) return;
+    renderQueue(await r.json());
+  } catch (e) {
+    /* non-fatal: queue health is best-effort */
+  }
+}
+
 function updateUptime(serverTs, serverStats) {
   if (serverStats) {
     stats = serverStats;
@@ -3925,9 +3957,11 @@ async function boot() {
   loadSourceCatalog();
   loadGlobalFeedStatus();
   loadFileScanStatus();
+  loadQueueStats();
   setInterval(loadFeeds, 300_000);
   setInterval(loadGlobalFeedStatus, 60_000);
   setInterval(loadBreachAlerts, 60_000);
+  setInterval(loadQueueStats, 5_000);
 }
 boot();
 </script>
